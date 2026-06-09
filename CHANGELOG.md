@@ -8,6 +8,26 @@
 ## [Unreleased]
 
 ### Fixed
+- 北京时间 2026-06-10 06:45 - 修复多个关键问题，服务可在 OpenWrt 24/25 正常运行
+  - **脚本架构修复**：
+    - 修复 /usr/sbin/ipthrottle 为正确的 CLI 入口（支持 start/stop/reload/status）
+    - 新增 /usr/lib/ipthrottle/ipthrottle-daemon 守护进程脚本
+    - 更新 Makefile 安装 ipthrottle-daemon
+  - **WAN 接口发现修复**：
+    - 修复 get_wan_interfaces 输出格式（UCI 列表可能返回空格分隔，需转换为每行一个）
+  - **规则解析修复**：
+    - 修复 prepare_rules 中的包名解析错误（iptables -> ipthrottle）
+  - **tc class ID 修复**：
+    - 修复 class ID 计算避免溢出（使用紧凑的 ID 方案：priority 1-99, rule 110-1089, IP 1000-65535）
+  - **IFB 设备修复**：
+    - 修复 IFB 设备创建（使用 ip link add 而非仅 modprobe）
+  - **nftables 修复**：
+    - 移除不支持的 ingress hook（ip family 不支持，改用 forward chain）
+    - 修复 flush 在表不存在时的错误（先 add table 再 flush）
+  - **UI 修复**：
+    - 精简列表显示为 6 列（启用、名称、IP、上传、下载、生效时间）
+    - 移除第二行 description（避免拥挤）
+    - 上传/下载标题直接带单位 Kbps
 - 北京时间 2026-06-10 06:15 - UI 兼容性修复和构建优化
   - 修复 LuCI 界面在 OpenWrt 默认主题下显示问题
     - 将 MultiValue 多选框改为独立 Flag 复选框（Bootstrap 主题兼容）
