@@ -185,22 +185,29 @@ jobs:
       - name: Restore Signing Key
         env:
           OPENWRT_SIGN_KEY: ${{ secrets.OPENWRT_SIGN_KEY }}
+          PKG_FORMAT: "${{ matrix.pkg_format }}"
         run: |
           set -e
           # ============================================================
-          # 从 GitHub Secret 恢复签名私钥
-          # 格式必须正确：
-          #   "untrusted comment: ..." 开头
-          #   然后是 base64 编码的私钥
-          #   末尾空行（重要！）
+          # 根据包格式恢复签名密钥：
+          # - ipk 格式: 使用 usign (ed25519)
+          # - apk 格式: 使用 RSA (OpenSSL)
           # ============================================================
-          if [ -n "$OPENWRT_SIGN_KEY" ]; then
-            # 使用 printf 保存密钥到临时文件
+          
+          if [ -z "$OPENWRT_SIGN_KEY" ]; then
+            echo "ERROR: OPENWRT_SIGN_KEY secret 为空！请在 GitHub Secrets 中配置"
+            exit 1
+          fi
+          
+          echo "📦 包格式: $PKG_FORMAT"
+          
+          if [ "$PKG_FORMAT" = "apk" ]; then
+            # apk 格式不需要 usign，SDK 会自动生成 RSA 密钥
+            echo "✅ apk 格式由 SDK 自动生成 RSA 密钥"
+          elif [ "$PKG_FORMAT" = "ipk" ]; then
+            # ipk 格式需要 usign 密钥
             printf "%s" "$OPENWRT_SIGN_KEY" > openwrt-sdk/key-build
-            
-            # 确保文件以 \n 结尾
             [ -n "$(tail -c1 openwrt-sdk/key-build)" ] && echo "" >> openwrt-sdk/key-build
-            
             chmod 600 openwrt-sdk/key-build
             echo "✅ 签名私钥已恢复到 openwrt-sdk/key-build"
             
@@ -208,9 +215,6 @@ jobs:
             echo "=== 私钥内容（前 50 字符）==="
             head -c 200 openwrt-sdk/key-build
             echo ""
-          else
-            echo "ERROR: OPENWRT_SIGN_KEY secret 为空！请在 GitHub Secrets 中配置"
-            exit 1
           fi
 
       - name: Copy source code
@@ -248,9 +252,19 @@ jobs:
             find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} "artifacts/${ARCH}-${PKG_FORMAT}/" \; 2>/dev/null || true
           done
           
-          # 如果有签名公钥，也一起打包
-          if [ -f openwrt-sdk/key-build.ucert ]; then
-            cp openwrt-sdk/key-build.ucert "artifacts/${ARCH}-${PKG_FORMAT}/"
+          # 根据包格式收集对应的公钥
+          if [ "$PKG_FORMAT" = "ipk" ]; then
+            # ipk 使用 usign (ed25519)
+            if [ -f openwrt-sdk/key-build.ucert ]; then
+              cp openwrt-sdk/key-build.ucert "artifacts/${ARCH}-${PKG_FORMAT}/"
+              echo "✅ 收集 usign 公钥: key-build.ucert"
+            fi
+          elif [ "$PKG_FORMAT" = "apk" ]; then
+            # apk 使用 RSA
+            if [ -f openwrt-sdk/public-key.pem ]; then
+              cp openwrt-sdk/public-key.pem "artifacts/${ARCH}-${PKG_FORMAT}/"
+              echo "✅ 收集 RSA 公钥: public-key.pem"
+            fi
           fi
           
           ls -lh "artifacts/${ARCH}-${PKG_FORMAT}/"
