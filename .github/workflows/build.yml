@@ -6,31 +6,35 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
-    inputs:
-      openwrt_version:
-        description: 'OpenWrt version (e.g., 23.05.0)'
-        required: false
-        default: '22.05.0'
-      arch:
-        description: 'Target architecture'
-        required: false
-        default: 'x86_64'
 
 env:
   PACKAGE_NAME: ipthrottle
-  OPENWRT_VERSION: '22.05.0'
 
 jobs:
   build:
-    name: Build IPThrottle Package
+    name: Build ${{ matrix.pkg_format }} (${{ matrix.openwrt_version }})
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
         arch:
           - x86_64
-        openwrt_version:
-          - '23.05.0'
+        include:
+          # OpenWrt 23.05.0：输出 .ipk 格式（opkg 包管理器）
+          - openwrt_version: '23.05.0'
+            pkg_format: 'ipk'
+            sdk_compress: 'tar.xz'
+          
+          # OpenWrt 24.10.0：输出 .ipk 格式（opkg 包管理器）
+          - openwrt_version: '24.10.0'
+            pkg_format: 'ipk'
+            sdk_compress: 'tar.zst'
+          
+          # OpenWrt SNAPSHOT：输出 .apk 格式（apk 包管理器）
+          - openwrt_version: 'SNAPSHOT'
+            pkg_format: 'apk'
+            sdk_compress: 'tar.zst'
     
     steps:
       - name: Checkout Repository
@@ -40,178 +44,209 @@ jobs:
 
       - name: Install Prerequisites
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
             clang flex bison g++ gawk \
             gcc-multilib g++-multilib \
             gettext git libncurses5-dev \
-            libssl-dev             python3-setuptools \
+            libssl-dev \
+            python3-setuptools \
             rsync unzip wget zlib1g-dev \
-            file ecj fakeroot
+            file ecj fakeroot \
+            zstd
+          echo "✅ 基础依赖已安装"
 
       - name: Cache OpenWrt SDK
         id: cache-sdk
         uses: actions/cache@v4
         with:
           path: openwrt-sdk
-          key: openwrt-sdk-${{ matrix.openwrt_version }}-${{ matrix.arch }}-v2
+          key: openwrt-sdk-${{ matrix.openwrt_version }}-${{ matrix.arch }}-v4
 
       - name: Download OpenWrt SDK
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
+          set -e
           # ============================================================
-          # 下载 OpenWrt SDK：根据架构矩阵变量定位正确的 SDK 文件路径
-          # OpenWrt 的架构名称(matrix.arch)与 SDK 文件路径(targets/)不同
-          # 例如 x86_64 在 matrix 中实际路径是 x86/64
+          # 下载 OpenWrt SDK
+          # - releases 版本路径: releases/VER/targets/x86/64/
+          # - snapshots 路径:    snapshots/targets/x86/64/
+          # - 文件名格式不同：
+          #   23.05: openwrt-sdk-VERSION-x86-64_gcc-VER_musl.Linux-x86_64.tar.xz
+          #   24.10: openwrt-sdk-VERSION-x86-64_gcc-VER_musl.Linux-x86_64.tar.zst
+          #   snapshot: openwrt-sdk-x86-64_gcc-VER_musl.Linux-x86_64.tar.zst
           # ============================================================
-
-          # 根据 CI matrix 架构名映射到 OpenWrt targets 路径和 SDK 文件名前缀
-          case "${{ matrix.arch }}" in
-            x86_64)
-              # x86_64 架构: 对应 targets/x86/64 子目录，SDK 后缀为 x86-64
-              ARCH_PATH="x86/64"
-              SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-x86-64"
-              ;;
-            arm_cortex-a7_neon-vfpv4)
-              # ARM Cortex-A7 NEON 架构: 对应 targets/armsr/armv7 子目录
-              ARCH_PATH="armsr/armv7"
-              SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-armsr-armv7"
-              ;;
-            mips_24kc)
-              # MIPS 24Kc 架构: 对应 targets/ath79/generic 子目录
-              ARCH_PATH="ath79/generic"
-              SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-ath79-generic"
-              ;;
-            *)
-              # 不支持的架构直接报错退出
-              echo "Unsupported architecture: ${{ matrix.arch }}"
-              exit 1
-              ;;
-          esac
-
-          # SDK 下载页面 URL
-          SDK_PAGE="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${ARCH_PATH}/"
+          
+          COMPRESS="${{ matrix.sdk_compress }}"
+          
+          # 根据版本确定基础 URL
+          if [ "${{ matrix.openwrt_version }}" = "SNAPSHOT" ]; then
+            SDK_PAGE="https://downloads.openwrt.org/snapshots/targets/x86/64/"
+            SDK_PREFIX="openwrt-sdk-x86-64"
+          else
+            SDK_PAGE="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/x86/64/"
+            SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-x86-64"
+          fi
+          
           echo "SDK page: $SDK_PAGE"
-
-          # 使用 curl 获取目录列表，用 grep 提取精确的 SDK 文件名
-          # SDK 文件名格式: openwrt-sdk-VER-ARCH_gcc-VER_musl.Linux-HOST.tar.xz
-          SDK_FILE=$(curl -sL "$SDK_PAGE" | grep -oP "${SDK_PREFIX}_[^\"<>]*\.tar\.xz" | head -1)
-
+          echo "SDK prefix: $SDK_PREFIX"
+          
+          # 提取 SDK 文件名（适配 .tar.xz 和 .tar.zst 两种格式）
+          SDK_FILE=$(curl -sL "$SDK_PAGE" | grep -oP "${SDK_PREFIX}_[^\"<>]*\.tar\.(xz|zst)" | head -1)
+          
           if [ -z "$SDK_FILE" ]; then
-            # 文件名提取失败，输出页面内容用于调试
             echo "ERROR: Failed to find SDK file matching prefix: $SDK_PREFIX"
             echo "Page content (first 2000 chars):"
             curl -sL "$SDK_PAGE" | head -c 2000
             exit 1
           fi
-
-          # 拼接完整下载 URL
+          
           SDK_URL="${SDK_PAGE}${SDK_FILE}"
           echo "Downloading SDK: $SDK_URL"
-
-          # 下载 SDK 压缩包（设置 300 秒超时）
-          wget -q --timeout=300 "$SDK_URL" -O openwrt-sdk.tar.xz
-
-          # 解压并标准化目录名
-          tar -xf openwrt-sdk.tar.xz
+          
+          # 下载 SDK 压缩包（使用 wget 支持断点续传）
+          wget -q --timeout=600 --tries=3 "$SDK_URL" -O openwrt-sdk.tar
+          
+          # 根据压缩格式选择解压方式
+          case "$COMPRESS" in
+            "tar.xz")
+              tar -xf openwrt-sdk.tar
+              ;;
+            "tar.zst")
+              tar --use-compress-program=unzstd -xf openwrt-sdk.tar
+              ;;
+            *)
+              echo "ERROR: Unsupported compress format: $COMPRESS"
+              exit 1
+              ;;
+          esac
+          
           mv openwrt-sdk-* openwrt-sdk
-          rm openwrt-sdk.tar.xz
-          echo "SDK downloaded and extracted successfully"
+          rm -f openwrt-sdk.tar
+          echo "✅ SDK downloaded and extracted successfully"
 
       - name: Build usign (Signing Tool)
         run: |
+          set -e
           # ============================================================
-          # 编译 usign 签名工具：用于 OpenWrt 包签名
-          # Actions 默认不带 usign，需要从源码编译
+          # 编译 usign 签名工具（OpenWrt 包签名必需）
           # ============================================================
           cd /tmp
-          git clone --depth 1 https://git.openwrt.org/project/usign.git
+          if [ ! -d usign ]; then
+            git clone --depth 1 https://git.openwrt.org/project/usign.git
+          fi
           cd usign
-          mkdir build && cd build
+          if [ ! -d build ]; then
+            mkdir build
+          fi
+          cd build
           cmake .. && make -j$(nproc)
           
           # 复制到全局路径
           sudo cp usign /usr/local/bin/usign
-          echo "✅ usign 已安装: $(usign --help 2>&1 | head -1)"
+          echo "✅ usign 已安装"
 
       - name: Prepare SDK Environment
         run: |
+          set -e
           cd openwrt-sdk
           
           # Update feeds
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # Configure SDK
+          # 配置 SDK
+          # CONFIG_SIGNED_PACKAGES=y 启用签名
+          # 包格式（ipk/apk）由 SDK 版本自动决定，无需手动配置
           cat > .config << EOF
-          CONFIG_PACKAGE_luci-base=m
-          CONFIG_PACKAGE_luci-mod-admin-full=m
-          CONFIG_PACKAGE_tc=m
-          CONFIG_PACKAGE_nftables=m
+          CONFIG_PACKAGE_ipthrottle=m
           CONFIG_SIGNED_PACKAGES=y
+          CONFIG_SIGNATURE_CHECK=n
           EOF
           
+          echo "✅ .config 已生成，启用签名"
           make defconfig
 
       - name: Restore Signing Key
-        if: env.OPENWRT_SIGN_KEY != ''
         env:
           OPENWRT_SIGN_KEY: ${{ secrets.OPENWRT_SIGN_KEY }}
         run: |
+          set -e
           # ============================================================
-          # 从 GitHub Secrets 恢复签名私钥
-          # 文件必须放在 SDK 根目录，命名为 key-build
-          # SDK 编译时会自动调用 usign 进行包签名
+          # 从 GitHub Secret 恢复签名私钥
+          # 格式必须正确：
+          #   "untrusted comment: ..." 开头
+          #   然后是 base64 编码的私钥
+          #   末尾空行（重要！）
           # ============================================================
-          echo "$OPENWRT_SIGN_KEY" > openwrt-sdk/key-build
-          chmod 600 openwrt-sdk/key-build
-          echo "✅ 签名私钥已恢复到 openwrt-sdk/key-build"
-          echo "包编译时将自动进行 usign 签名"
+          if [ -n "$OPENWRT_SIGN_KEY" ]; then
+            # 使用 printf 保存密钥到临时文件
+            printf "%s" "$OPENWRT_SIGN_KEY" > openwrt-sdk/key-build
+            
+            # 确保文件以 \n 结尾
+            [ -n "$(tail -c1 openwrt-sdk/key-build)" ] && echo "" >> openwrt-sdk/key-build
+            
+            chmod 600 openwrt-sdk/key-build
+            echo "✅ 签名私钥已恢复到 openwrt-sdk/key-build"
+            
+            # 验证密钥格式
+            echo "=== 私钥内容（前 50 字符）==="
+            head -c 200 openwrt-sdk/key-build
+            echo ""
+          else
+            echo "ERROR: OPENWRT_SIGN_KEY secret 为空！请在 GitHub Secrets 中配置"
+            exit 1
+          fi
 
-      - name: Install Package Source
+      - name: Copy source code
         run: |
-          # 将源码文件按 files/ 和 root/ 目录结构复制到 SDK package 目录
-          # Makefile 使用相对路径 ./files/... 和 ./root/... 来引用这些文件
-          # 所以必须保留 files/ 和 root/ 目录层级结构，不能用通配符展开
+          set -e
+          # 将源码文件复制到 SDK package 目录
           mkdir -p openwrt-sdk/package/ipthrottle
           cp -r ipthrottle/files openwrt-sdk/package/ipthrottle/
           cp -r ipthrottle/root openwrt-sdk/package/ipthrottle/
           cp ipthrottle/Makefile openwrt-sdk/package/ipthrottle/
+          echo "✅ 源码已复制到 openwrt-sdk/package/ipthrottle/"
 
       - name: Build Package
         run: |
+          set -e
           cd openwrt-sdk
-          # 编译并自动签名（SDK 已配置 CONFIG_SIGNED_PACKAGES=y）
           make package/ipthrottle/compile V=s
+          echo "✅ 包编译完成"
 
       - name: Collect Package Files
         run: |
-          # 创建制品目录
-          mkdir -p artifacts/${{ matrix.arch }}
+          set -e
+          PKG_FORMAT="${{ matrix.pkg_format }}"
+          ARCH="${{ matrix.arch }}"
+          VERSION="${{ matrix.openwrt_version }}"
           
-          # 收集 ipthrottle 编译产物
-          find openwrt-sdk/bin/packages/ -name "ipthrottle*.ipk" -exec cp {} artifacts/${{ matrix.arch }}/ \;
+          # 创建产物目录（区分 ipk/apk 格式）
+          mkdir -p "artifacts/${ARCH}-${PKG_FORMAT}"
           
-          # 收集签名文件（OpenWrt 签名机制）
-          # Packages.sig - 索引文件签名
-          # Packages.json.sig 或 index.json.sig - JSON 索引签名
+          # 收集包文件（ipk 或 apk）
+          find openwrt-sdk/bin/packages/ -name "ipthrottle*.$PKG_FORMAT" -exec cp {} "artifacts/${ARCH}-${PKG_FORMAT}/" \;
+          
+          # 收集签名文件
           for sig_file in Packages.sig Packages.json.sig index.json.sig; do
-            find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} artifacts/${{ matrix.arch }}/ \; 2>/dev/null || true
+            find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} "artifacts/${ARCH}-${PKG_FORMAT}/" \; 2>/dev/null || true
           done
           
           # 如果有签名公钥，也一起打包
           if [ -f openwrt-sdk/key-build.ucert ]; then
-            cp openwrt-sdk/key-build.ucert artifacts/${{ matrix.arch }}/
+            cp openwrt-sdk/key-build.ucert "artifacts/${ARCH}-${PKG_FORMAT}/"
           fi
           
-          ls -lh artifacts/${{ matrix.arch }}/
+          ls -lh "artifacts/${ARCH}-${PKG_FORMAT}/"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ipthrottle-${{ matrix.arch }}-${{ matrix.openwrt_version }}
-          path: artifacts/${{ matrix.arch }}/
+          name: ipthrottle-${{ matrix.arch }}-${{ matrix.pkg_format }}-${{ matrix.openwrt_version }}
+          path: artifacts/${{ matrix.arch }}-${{ matrix.pkg_format }}/
           retention-days: 30
 
   release:
@@ -233,6 +268,7 @@ jobs:
         with:
           files: |
             release-files/**/*.ipk
+            release-files/**/*.apk
           generate_release_notes: true
           draft: false
           prerelease: false
@@ -249,6 +285,7 @@ jobs:
 
       - name: Run Shell Script Syntax Check
         run: |
+          set -e
           echo "Checking shell script syntax..."
           for script in files/usr/lib/ipthrottle/*.sh files/usr/sbin/ipthrottle files/etc/init.d/ipthrottle; do
             if [ -f "$script" ]; then
@@ -263,6 +300,7 @@ jobs:
 
       - name: Validate JSON Files
         run: |
+          set -e
           echo "Validating JSON files..."
           for json in root/usr/share/luci/menu.d/*.json root/usr/share/rpcd/acl.d/*.json; do
             if [ -f "$json" ]; then
@@ -277,6 +315,7 @@ jobs:
 
       - name: Check File Structure
         run: |
+          set -e
           echo "Verifying package structure..."
           
           required_files=(
@@ -303,6 +342,7 @@ jobs:
 
       - name: Check UCI Config Format
         run: |
+          set -e
           echo "Validating UCI configuration..."
           
           if ! grep -q "config ipthrottle" files/etc/config/ipthrottle; then
