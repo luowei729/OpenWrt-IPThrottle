@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+### Added
+- 北京时间 2026-06-10 06:50 - 依赖自动检测和安装功能
+  - 新增 `/usr/lib/ipthrottle/deps.sh` 依赖检测脚本
+  - 支持 apk (OpenWrt 25+) 和 opkg (OpenWrt 24) 两种包管理器
+  - 自动检测并安装:
+    - tc 命令 (tc-tiny/tc/iproute2-tc)
+    - nftables
+    - kmod-ifb (入站限速)
+    - kmod-sched (htb 限速)
+  - init.d 启动前自动检查依赖
+  - 依赖安装日志记录到系统日志
+
 ### Fixed
 - 北京时间 2026-06-10 06:45 - 修复多个关键问题，服务可在 OpenWrt 24/25 正常运行
   - **脚本架构修复**：
