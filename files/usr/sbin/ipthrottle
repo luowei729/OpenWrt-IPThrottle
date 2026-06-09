@@ -1,13 +1,13 @@
 #!/bin/sh
 # ==========================================
 # OpenWrt IPThrottle 插件 - 守护进程
-# 文件: /usr/lib/iptest/iptest-daemon
+# 文件: /usr/lib/ipthrottle/ipthrottle-daemon
 # 功能: 常驻进程，监听 UCI 配置变化并自动重载
 # 创建时间: 2026-06-09
 # ==========================================
 
 # 监控 UCI 配置文件变化
-UCI_CONFIG="/etc/config/iptest"
+UCI_CONFIG="/etc/config/ipthrottle"
 LAST_MOD_TIME=0
 
 # 主循环
@@ -18,8 +18,8 @@ while true; do
         
         # 如果文件被修改，触发重载
         if [ "$CURRENT_MOD_TIME" != "$LAST_MOD_TIME" ]; then
-            logger -t iptest-daemon "Configuration changed, reloading rules..."
-            /usr/sbin/iptest reload
+            logger -t ipthrottle-daemon "Configuration changed, reloading rules..."
+            /usr/sbin/ipthrottle reload
             LAST_MOD_TIME=$CURRENT_MOD_TIME
         fi
     fi

@@ -3,9 +3,9 @@
 # 首次安装时执行
 
 # 创建默认配置（如果不存在）
-if [ ! -f /etc/config/iptest ]; then
-    cat > /etc/config/iptest << 'EOF'
-config iptest
+if [ ! -f /etc/config/ipthrottle ]; then
+    cat > /etc/config/ipthrottle << 'EOF'
+config ipthrottle
     option enabled '0'
 
 config rule 'example1'
@@ -47,11 +47,11 @@ config rule 'example3'
     option priority '30'
     option schedule_type 'always'
 EOF
-    echo "已创建默认配置文件 /etc/config/iptest"
+    echo "已创建默认配置文件 /etc/config/ipthrottle"
 fi
 
 # 启用服务（可选，取消注释以启用）
-# /etc/init.d/iptest enable
-# /etc/init.d/iptest start
+# /etc/init.d/ipthrottle enable
+# /etc/init.d/ipthrottle start
 
 exit 0

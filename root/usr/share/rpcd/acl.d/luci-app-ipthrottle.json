@@ -1,0 +1,11 @@
+{
+	"luci-app-ipthrottle": {
+		"description": "Grant access to IPThrottle configuration",
+		"read": {
+			"uci": [ "ipthrottle" ]
+		},
+		"write": {
+			"uci": [ "ipthrottle" ]
+		}
+	}
+}

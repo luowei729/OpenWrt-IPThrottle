@@ -6,14 +6,14 @@
 return view.extend({
 	load: function() {
 		return Promise.all([
-			uci.load('iptest')
+			uci.load('ipthrottle')
 		]);
 	},
 
 	render: function() {
 		var m, s, o;
 
-		m = new form.Map('iptest', _('IP限速设置'),
+		m = new form.Map('ipthrottle', _('IP限速设置'),
 			_('配置内网IP的限速规则'));
 
 		s = m.section(form.GridSection, 'rule', _('规则列表'));

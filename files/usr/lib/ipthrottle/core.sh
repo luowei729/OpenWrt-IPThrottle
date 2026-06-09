@@ -1,7 +1,7 @@
 #!/bin/sh
 # ==========================================
 # OpenWrt-IPThrottle 核心逻辑模块
-# 文件: /usr/lib/iptest/core.sh
+# 文件: /usr/lib/ipthrottle/core.sh
 # 功能: 生成 tc/nft 命令、应用规则、服务控制
 # 创建时间: 2026-06-09
 # 设计说明: 
@@ -11,12 +11,12 @@
 # ==========================================
 
 # 加载依赖模块
-. /usr/lib/iptest/ip.sh
-. /usr/lib/iptest/wan.sh
-. /usr/lib/iptest/schedule.sh
+. /usr/lib/ipthrottle/ip.sh
+. /usr/lib/ipthrottle/wan.sh
+. /usr/lib/ipthrottle/schedule.sh
 
 # 日志标签
-IPT_CORE_LOG_TAG="iptest-core"
+IPT_LOG_TAG="ipthrottle-core"
 
 # 记录日志
 core_log_msg() {
@@ -27,8 +27,8 @@ core_log_msg() {
 # 临时文件管理
 # ==========================================
 # 使用临时文件代替全局变量，避免子 shell 作用域问题
-# 所有临时文件放在 /tmp/iptest_work/ 目录下
-WORK_DIR="/tmp/iptest_work"
+# 所有临时文件放在 /tmp/ipthrottle_work/ 目录下
+WORK_DIR="/tmp/ipthrottle_work"
 
 # 初始化工作目录
 init_work_dir() {
@@ -98,10 +98,10 @@ prepare_rules() {
     
     # 第一遍：遍历所有 enabled 且 schedule 匹配的规则，记录 priority
     local config
-    for config in $(uci -q show iptest | grep '=rule$' | sed 's/^iptables\.//;s/=rule$//'); do
+    for config in $(uci -q show ipthrottle | grep '=rule$' | sed 's/^iptables\.//;s/=rule$//'); do
         # 跳过 disabled 规则
         local enabled
-        enabled=$(uci -q get iptest."$config".enabled)
+        enabled=$(uci -q get ipthrottle."$config".enabled)
         [ "$enabled" = "1" ] || continue
         
         # 检查 schedule 是否生效（当前时间）
@@ -111,7 +111,7 @@ prepare_rules() {
         
         # 读取 priority（默认 10，clamp 1-99）
         local priority
-        priority=$(uci -q get iptest."$config".priority)
+        priority=$(uci -q get ipthrottle."$config".priority)
         [ -z "$priority" ] && priority=10
         [ "$priority" -lt 1 ] 2>/dev/null && priority=1
         [ "$priority" -gt 99 ] 2>/dev/null && priority=99
@@ -154,7 +154,7 @@ get_rule_wans_to_file() {
     local rule="$1"
     local outfile="$2"
     local mask
-    mask=$(uci -q get iptest."$rule".wan_mask)
+    mask=$(uci -q get ipthrottle."$rule".wan_mask)
     [ -z "$mask" ] && mask="all"
     parse_wan_mask "$mask" > "$outfile"
     return $?
@@ -236,30 +236,30 @@ create_root_htb() {
 # nftables 规则生成（Phase 2）
 # ==========================================
 
-# 生成 nftables 配置文件（/tmp/iptest.nft）
+# 生成 nftables 配置文件（/tmp/ipthrottle.nft）
 # 实现原因: nftables 支持通过 -f 加载配置文件，比逐条调用 nft 命令效率高
-# 输出: /tmp/iptest.nft
+# 输出: /tmp/ipthrottle.nft
 generate_nftables_config() {
-    local nft_file="$WORK_DIR/iptest.nft"
+    local nft_file="$WORK_DIR/ipthrottle.nft"
     core_log_msg "INFO" "Generating nftables config: $nft_file"
     
-    # 写入文件头：flush 现有 iptest 表，创建新表
+    # 写入文件头：flush 现有 ipthrottle 表，创建新表
     cat > "$nft_file" << 'HEADER'
 #!/usr/sbin/nft -f
 # OpenWrt-IPThrottle 自动生成的 nftables 规则
-# 注意: 本文件由 iptest 服务自动生成，请勿手动修改
+# 注意: 本文件由 ipthrottle 服务自动生成，请勿手动修改
 
-flush table ip iptest
+flush table ip ipthrottle
 HEADER
     
-    # 如果 iptest 表不存在，需要创建
+    # 如果 ipthrottle 表不存在，需要创建
     # 使用 "add table" 而不是 "table"，如果不存在则创建，否则不报错
     {
         echo ""
-        echo "add table ip iptest"
+        echo "add table ip ipthrottle"
         echo ""
-        echo "add chain ip iptest forward { type filter hook forward priority -1 ; policy accept ; }"
-        echo "add chain ip iptest ingress { type filter hook ingress priority 0 ; policy accept ; }"
+        echo "add chain ip ipthrottle forward { type filter hook forward priority -1 ; policy accept ; }"
+        echo "add chain ip ipthrottle ingress { type filter hook ingress priority 0 ; policy accept ; }"
     } >> "$nft_file"
     
     # 临时文件，保存 forward 和 ingress 规则
@@ -281,7 +281,7 @@ HEADER
         
         # 读取协议
         local _proto
-        _proto=$(uci -q get iptest."$_rule".proto)
+        _proto=$(uci -q get ipthrottle."$_rule".proto)
         [ -z "$_proto" ] && _proto="any"
         
         # 展开所有 IP 到临时文件
@@ -300,24 +300,24 @@ HEADER
             case "$_proto" in
                 tcp)
                     # forward: 匹配出站方向（源 IP 为 LAN IP）
-                    echo "add rule ip iptest forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
                     # ingress: 匹配入站方向（目的 IP 为 LAN IP）
-                    echo "add rule ip iptest ingress ip daddr $_ip meta l4proto tcp meta mark set $_mark" >> "$igs_rules"
+                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto tcp meta mark set $_mark" >> "$igs_rules"
                     ;;
                 udp)
-                    echo "add rule ip iptest forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip iptest ingress ip daddr $_ip meta l4proto udp meta mark set $_mark" >> "$igs_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto udp meta mark set $_mark" >> "$igs_rules"
                     ;;
                 tcp+udp)
-                    echo "add rule ip iptest forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip iptest forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip iptest ingress ip daddr $_ip meta l4proto tcp meta mark set $_mark" >> "$igs_rules"
-                    echo "add rule ip iptest ingress ip daddr $_ip meta l4proto udp meta mark set $_mark" >> "$igs_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto tcp meta mark set $_mark" >> "$igs_rules"
+                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto udp meta mark set $_mark" >> "$igs_rules"
                     ;;
                 *)
                     # any：不限制协议
-                    echo "add rule ip iptest forward ip saddr $_ip meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip iptest ingress ip daddr $_ip meta mark set $_mark" >> "$igs_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta mark set $_mark" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta mark set $_mark" >> "$igs_rules"
                     ;;
             esac
         done < "$ip_list_file"
@@ -332,17 +332,17 @@ HEADER
 
 # 验证并加载 nftables 规则
 load_nftables_config() {
-    local nft_file="$WORK_DIR/iptest.nft"
+    local nft_file="$WORK_DIR/ipthrottle.nft"
     
     # 语法检查
-    if ! nft -c -f "$nft_file" 2>/tmp/iptest_nft_err; then
-        core_log_msg "ERROR" "NFT syntax check failed: $(cat /tmp/iptest_nft_err)"
+    if ! nft -c -f "$nft_file" 2>/tmp/ipthrottle_nft_err; then
+        core_log_msg "ERROR" "NFT syntax check failed: $(cat /tmp/ipthrottle_nft_err)"
         return 1
     fi
     
     # 原子加载：先 flush 后添加，使用单条 nft -f 调用
-    if ! nft -f "$nft_file" 2>/tmp/iptest_nft_err; then
-        core_log_msg "ERROR" "NFT load failed: $(cat /tmp/iptest_nft_err)"
+    if ! nft -f "$nft_file" 2>/tmp/ipthrottle_nft_err; then
+        core_log_msg "ERROR" "NFT load failed: $(cat /tmp/ipthrottle_nft_err)"
         return 1
     fi
     
@@ -399,13 +399,13 @@ apply_tc_to_device() {
         
         # 读取限速参数
         local _mode _rate_kbps
-        _mode=$(uci -q get iptest."$_rule".mode)
+        _mode=$(uci -q get ipthrottle."$_rule".mode)
         [ -z "$_mode" ] && _mode="independent"
         
         if [ "$direction" = "up" ]; then
-            _rate_kbps=$(uci -q get iptest."$_rule".upload_kbps)
+            _rate_kbps=$(uci -q get ipthrottle."$_rule".upload_kbps)
         else
-            _rate_kbps=$(uci -q get iptest."$_rule".download_kbps)
+            _rate_kbps=$(uci -q get ipthrottle."$_rule".download_kbps)
         fi
         [ -z "$_rate_kbps" ] && continue
         
@@ -517,7 +517,7 @@ apply_tc_to_device() {
 #   4. 为每个 WAN 接口 + 每个方向 应用 tc 规则
 #   5. 生成并加载 nftables 规则
 start_service() {
-    core_log_msg "INFO" "====== iptest service starting ======"
+    core_log_msg "INFO" "====== ipthrottle service starting ======"
     
     # 准备数据：规则排序和 mark 分配
     init_work_dir
@@ -582,15 +582,15 @@ start_service() {
         return 1
     }
     
-    core_log_msg "INFO" "====== iptest service started successfully ======"
+    core_log_msg "INFO" "====== ipthrottle service started successfully ======"
 }
 
-# 停止服务：清理所有 iptest 创建的 tc/nft 规则
+# 停止服务：清理所有 ipthrottle 创建的 tc/nft 规则
 stop_service() {
-    core_log_msg "INFO" "====== iptest service stopping ======"
+    core_log_msg "INFO" "====== ipthrottle service stopping ======"
     
-    # 删除 nftables iptest 表
-    nft delete table ip iptest 2>/dev/null
+    # 删除 nftables ipthrottle 表
+    nft delete table ip ipthrottle 2>/dev/null
     
     # 清理每个 WAN 接口的 IFB 和 tc
     local wans_file="$WORK_DIR/all_wans"
@@ -616,13 +616,13 @@ stop_service() {
     # 清理工作目录
     rm -rf "$WORK_DIR"
     
-    core_log_msg "INFO" "====== iptest service stopped ======"
+    core_log_msg "INFO" "====== ipthrottle service stopped ======"
 }
 
 # 重新加载：先 stop 再 start
 # 实现原因: reload 需要全量重建，确保规则一致性
 reload_service() {
-    core_log_msg "INFO" "Reloading iptest configuration"
+    core_log_msg "INFO" "Reloading ipthrottle configuration"
     stop_service
     start_service
 }
@@ -631,31 +631,31 @@ reload_service() {
 # CLI 命令入口（用于调试和手动操作）
 # ==========================================
 
-# iptest 命令: apply (应用当前配置)
+# ipthrottle 命令: apply (应用当前配置)
 cmd_apply() {
     start_service
 }
 
-# iptest 命令: clear (清除所有规则)
+# ipthrottle 命令: clear (清除所有规则)
 cmd_clear() {
     stop_service
 }
 
-# iptest 命令: reload (重新加载)
+# ipthrottle 命令: reload (重新加载)
 cmd_reload() {
     reload_service
 }
 
-# iptest 命令: status (查看当前状态)
+# ipthrottle 命令: status (查看当前状态)
 cmd_status() {
-    echo "=== iptest 服务状态 ==="
+    echo "=== ipthrottle 服务状态 ==="
     
-    # 检查 nftables iptest 表
+    # 检查 nftables ipthrottle 表
     echo "nftables 表:"
-    if nft list table ip iptest 2>/dev/null | head -3; then
-        echo "  ✓ iptest 表已加载"
+    if nft list table ip ipthrottle 2>/dev/null | head -3; then
+        echo "  ✓ ipthrottle 表已加载"
     else
-        echo "  ✗ iptest 表未加载"
+        echo "  ✗ ipthrottle 表未加载"
     fi
     
     # 检查 tc 配置
@@ -671,7 +671,7 @@ cmd_status() {
             local _mark
             _mark=$(get_mark_for_rule "$_r")
             local _name
-            _name=$(uci -q get iptest."$_r".name)
+            _name=$(uci -q get ipthrottle."$_r".name)
             echo "  priority=$_p mark=$_mark rule=$_r name=$_name"
         done < "$SORTED_RULES_FILE"
     else

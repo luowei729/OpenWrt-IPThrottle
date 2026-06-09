@@ -7,19 +7,19 @@ OpenWrt-IPThrottle/
 ├── files/                          # 目标系统文件
 │   ├── usr/
 │   │   ├── lib/
-│   │   │   └── iptest/            # 脚本库
+│   │   │   └── ipthrottle/            # 脚本库
 │   │   │       ├── core.sh        # 核心逻辑
 │   │   │       ├── ip.sh          # IP地址解析
 │   │   │       ├── wan.sh         # WAN接口管理
 │   │   │       ├── schedule.sh    # 时间计划
-│   │   │       └── iptest-daemon  # 守护进程
+│   │   │       └── ipthrottle-daemon  # 守护进程
 │   │   └── sbin/
-│   │       └── iptest             # 命令行工具
+│   │       └── ipthrottle             # 命令行工具
 │   └── etc/
 │       ├── config/
-│       │   └── iptest             # UCI配置
+│       │   └── ipthrottle             # UCI配置
 │       └── init.d/
-│           └── iptest             # 服务脚本
+│           └── ipthrottle             # 服务脚本
 ├── root/                           # 目标根目录
 │   ├── usr/share/
 │   │   ├── luci/
@@ -112,15 +112,15 @@ is_time_in_range() {
 **luci-menu.json:**
 ```json
 {
-    "admin/network/iptest": {
+    "admin/network/ipthrottle": {
         "title": "IP Throttle",
         "order": 50,
         "action": {
             "type": "view",
-            "path": "iptest"
+            "path": "ipthrottle"
         },
         "depends": {
-            "acl": ["luci-app-iptest"]
+            "acl": ["luci-app-ipthrottle"]
         }
     }
 }
@@ -128,7 +128,7 @@ is_time_in_range() {
 
 ### Lua视图
 
-**iptest.lua** 提供：
+**ipthrottle.lua** 提供：
 - 规则列表显示
 - 规则添加/编辑/删除
 - 状态监控
@@ -230,7 +230,7 @@ validate_ip() {
 
 3. **日志输出**: 使用logger记录错误
 ```bash
-logger -t iptest "ERROR: Invalid IP address: $ip"
+logger -t ipthrottle "ERROR: Invalid IP address: $ip"
 ```
 
 ### 性能优化
@@ -238,7 +238,7 @@ logger -t iptest "ERROR: Invalid IP address: $ip"
 1. **避免重复执行**: 缓存计算结果
 ```bash
 # 缓存WAN接口列表
-wan_cache="/tmp/iptest_wan_cache"
+wan_cache="/tmp/ipthrottle_wan_cache"
 if [ ! -f "$wan_cache" ]; then
     get_wan_interfaces > "$wan_cache"
 fi
@@ -325,30 +325,30 @@ cp -r OpenWrt-IPThrottle package/
 
 3. **构建包**:
 ```bash
-make package/iptest/compile V=s
+make package/ipthrottle/compile V=s
 ```
 
 4. **找到生成的安装包**:
 ```bash
-ls bin/packages/*/base/iptest_*.ipk
+ls bin/packages/*/base/ipthrottle_*.ipk
 ```
 
 ### 安装到路由器
 
 ```bash
 # 传输安装包到路由器
-scp bin/packages/*/base/iptest_*.ipk root@192.168.1.1:/tmp/
+scp bin/packages/*/base/ipthrottle_*.ipk root@192.168.1.1:/tmp/
 
 # SSH登录路由器
 ssh root@192.168.1.1
 
 # 安装
 opkg update
-opkg install /tmp/iptest_*.ipk
+opkg install /tmp/ipthrottle_*.ipk
 
 # 启动服务
-/etc/init.d/iptest start
-/etc/init.d/iptest enable
+/etc/init.d/ipthrottle start
+/etc/init.d/ipthrottle enable
 ```
 
 ## 常见问题
@@ -370,7 +370,7 @@ opkg install /tmp/iptest_*.ipk
 **解决**:
 ```bash
 # 检查JSON格式
-python3 -m json.tool root/usr/share/luci/menu.d/luci-app-iptest.json
+python3 -m json.tool root/usr/share/luci/menu.d/luci-app-ipthrottle.json
 
 # 重启LuCI
 /etc/init.d/uhttpd restart
@@ -378,7 +378,7 @@ python3 -m json.tool root/usr/share/luci/menu.d/luci-app-iptest.json
 
 ### 3. 服务无法启动
 
-**问题**: `/etc/init.d/iptest start` 无响应
+**问题**: `/etc/init.d/ipthrottle start` 无响应
 
 **原因**: 守护进程依赖缺失或路径错误
 
@@ -388,7 +388,7 @@ python3 -m json.tool root/usr/share/luci/menu.d/luci-app-iptest.json
 opkg list-installed | grep -E "tc|nftables"
 
 # 检查路径
-ls -l /usr/lib/iptest/
+ls -l /usr/lib/ipthrottle/
 ```
 
 ## 开发路线图
@@ -430,7 +430,7 @@ ls -l /usr/lib/iptest/
 
 ## 技术支持
 
-- 项目地址: https://github.com/yourusername/openwrt-iptest
+- 项目地址: https://github.com/yourusername/openwrt-ipthrottle
 - 问题反馈: 提交Issue
 - 开发讨论: 加入开发群组
 

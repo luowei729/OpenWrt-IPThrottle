@@ -1,0 +1,10 @@
+{
+	"admin/network/ipthrottle": {
+		"title": "IPThrottle",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "ipthrottle"
+		}
+	}
+}

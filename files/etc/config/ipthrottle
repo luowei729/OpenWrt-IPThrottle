@@ -1,14 +1,14 @@
 # IPThrottle Configuration File
-# This file is parsed by UCI and iptest daemon
+# This file is parsed by UCI and ipthrottle daemon
 
-config iptest 'config'
+config ipthrottle 'config'
     option enabled '0'
     option default_upload '1024'
     option default_download '4096'
 
 # Example rule: Limit single IP
 config rule
-    option name 'Example-Laptop'
+    option name 'ipthrottle-example-Laptop'
     option enabled '0'
     option priority '10'
     option wan_mask 'all'
@@ -22,7 +22,7 @@ config rule
 
 # Example rule: Limit IP range
 config rule
-    option name 'Example-Network-Range'
+    option name 'ipthrottle-example-Network-Range'
     option enabled '0'
     option priority '20'
     option wan_mask 'all'

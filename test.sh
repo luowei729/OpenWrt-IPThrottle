@@ -33,7 +33,7 @@ echo
 
 # 测试1: 目录结构
 echo "测试 1: 目录结构检查"
-[ -d "files/usr/lib/iptest" ] && pass "核心库目录存在" || fail "核心库目录缺失"
+[ -d "files/usr/lib/ipthrottle" ] && pass "核心库目录存在" || fail "核心库目录缺失"
 [ -d "files/usr/sbin" ] && pass "可执行文件目录存在" || fail "可执行文件目录缺失"
 [ -d "files/etc/init.d" ] && pass "init.d目录存在" || fail "init.d目录缺失"
 [ -d "files/etc/config" ] && pass "配置目录存在" || fail "配置目录缺失"
@@ -46,24 +46,24 @@ echo
 
 # 测试2: 核心脚本文件
 echo "测试 2: 核心脚本文件检查"
-[ -f "files/usr/lib/iptest/core.sh" ] && pass "core.sh 存在" || fail "core.sh 缺失"
-[ -f "files/usr/lib/iptest/ip.sh" ] && pass "ip.sh 存在" || fail "ip.sh 缺失"
-[ -f "files/usr/lib/iptest/wan.sh" ] && pass "wan.sh 存在" || fail "wan.sh 缺失"
-[ -f "files/usr/lib/iptest/schedule.sh" ] && pass "schedule.sh 存在" || fail "schedule.sh 缺失"
-[ -f "files/usr/sbin/iptest" ] && pass "iptest 主程序存在" || fail "iptest 主程序缺失"
+[ -f "files/usr/lib/ipthrottle/core.sh" ] && pass "core.sh 存在" || fail "core.sh 缺失"
+[ -f "files/usr/lib/ipthrottle/ip.sh" ] && pass "ip.sh 存在" || fail "ip.sh 缺失"
+[ -f "files/usr/lib/ipthrottle/wan.sh" ] && pass "wan.sh 存在" || fail "wan.sh 缺失"
+[ -f "files/usr/lib/ipthrottle/schedule.sh" ] && pass "schedule.sh 存在" || fail "schedule.sh 缺失"
+[ -f "files/usr/sbin/ipthrottle" ] && pass "ipthrottle 主程序存在" || fail "ipthrottle 主程序缺失"
 echo
 
 # 测试3: 服务脚本
 echo "测试 3: 服务脚本检查"
-[ -f "files/etc/init.d/iptest" ] && pass "init.d/iptest 存在" || fail "init.d/iptest 缺失"
-[ -f "files/etc/cron.d/iptest" ] && pass "cron.d/iptest 存在" || fail "cron.d/iptest 缺失"
-[ -f "files/etc/hotplug.d/iface/90-iptest" ] && pass "hotplug脚本存在" || fail "hotplug脚本缺失"
+[ -f "files/etc/init.d/ipthrottle" ] && pass "init.d/ipthrottle 存在" || fail "init.d/ipthrottle 缺失"
+[ -f "files/etc/cron.d/ipthrottle" ] && pass "cron.d/ipthrottle 存在" || fail "cron.d/ipthrottle 缺失"
+[ -f "files/etc/hotplug.d/iface/90-ipthrottle" ] && pass "hotplug脚本存在" || fail "hotplug脚本缺失"
 echo
 
 # 测试4: 配置文件
 echo "测试 4: 配置文件检查"
-[ -f "files/etc/config/iptest" ] && pass "UCI配置文件存在" || fail "UCI配置文件缺失"
-if grep -qE "^config (global|rule)" files/etc/config/iptest 2>/dev/null; then
+[ -f "files/etc/config/ipthrottle" ] && pass "UCI配置文件存在" || fail "UCI配置文件缺失"
+if grep -qE "^config (global|rule)" files/etc/config/ipthrottle 2>/dev/null; then
     pass "UCI配置文件格式正确"
 else
     fail "UCI配置文件格式错误"
@@ -72,40 +72,40 @@ echo
 
 # 测试5: LuCI文件
 echo "测试 5: LuCI集成文件检查"
-if [ -f "root/usr/share/luci/menu.d/luci-app-iptest.json" ] || [ -f "root/usr/share/luci/menu.d/iptest.json" ]; then
+if [ -f "root/usr/share/luci/menu.d/luci-app-ipthrottle.json" ] || [ -f "root/usr/share/luci/menu.d/ipthrottle.json" ]; then
     pass "LuCI菜单配置存在"
 else
     fail "LuCI菜单配置缺失"
 fi
-[ -f "root/usr/share/rpcd/acl.d/luci-app-iptest.json" ] && pass "RPC ACL配置存在" || fail "RPC ACL配置缺失"
-[ -f "root/www/luci-static/resources/view/iptest.js" ] && pass "LuCI视图文件存在" || fail "LuCI视图文件缺失"
+[ -f "root/usr/share/rpcd/acl.d/luci-app-ipthrottle.json" ] && pass "RPC ACL配置存在" || fail "RPC ACL配置缺失"
+[ -f "root/www/luci-static/resources/view/ipthrottle.js" ] && pass "LuCI视图文件存在" || fail "LuCI视图文件缺失"
 echo
 
 # 测试6: 文件权限
 echo "测试 6: 文件执行权限检查"
-[ -x "files/usr/lib/iptest/core.sh" ] && pass "core.sh 可执行" || fail "core.sh 不可执行"
-[ -x "files/usr/lib/iptest/ip.sh" ] && pass "ip.sh 可执行" || fail "ip.sh 不可执行"
-[ -x "files/usr/lib/iptest/wan.sh" ] && pass "wan.sh 可执行" || fail "wan.sh 不可执行"
-[ -x "files/usr/lib/iptest/schedule.sh" ] && pass "schedule.sh 可执行" || fail "schedule.sh 不可执行"
-[ -x "files/usr/sbin/iptest" ] && pass "iptest 可执行" || fail "iptest 不可执行"
-[ -x "files/etc/init.d/iptest" ] && pass "init.d/iptest 可执行" || fail "init.d/iptest 不可执行"
+[ -x "files/usr/lib/ipthrottle/core.sh" ] && pass "core.sh 可执行" || fail "core.sh 不可执行"
+[ -x "files/usr/lib/ipthrottle/ip.sh" ] && pass "ip.sh 可执行" || fail "ip.sh 不可执行"
+[ -x "files/usr/lib/ipthrottle/wan.sh" ] && pass "wan.sh 可执行" || fail "wan.sh 不可执行"
+[ -x "files/usr/lib/ipthrottle/schedule.sh" ] && pass "schedule.sh 可执行" || fail "schedule.sh 不可执行"
+[ -x "files/usr/sbin/ipthrottle" ] && pass "ipthrottle 可执行" || fail "ipthrottle 不可执行"
+[ -x "files/etc/init.d/ipthrottle" ] && pass "init.d/ipthrottle 可执行" || fail "init.d/ipthrottle 不可执行"
 echo
 
 # 测试7: Shell脚本语法
 echo "测试 7: Shell脚本语法检查"
-sh -n files/usr/lib/iptest/core.sh 2>/dev/null && pass "core.sh 语法正确" || fail "core.sh 语法错误"
-sh -n files/usr/lib/iptest/ip.sh 2>/dev/null && pass "ip.sh 语法正确" || fail "ip.sh 语法错误"
-sh -n files/usr/lib/iptest/wan.sh 2>/dev/null && pass "wan.sh 语法正确" || fail "wan.sh 语法错误"
-sh -n files/usr/lib/iptest/schedule.sh 2>/dev/null && pass "schedule.sh 语法正确" || fail "schedule.sh 语法错误"
-sh -n files/usr/sbin/iptest 2>/dev/null && pass "iptest 语法正确" || fail "iptest 语法错误"
-sh -n files/etc/init.d/iptest 2>/dev/null && pass "init.d/iptest 语法正确" || fail "init.d/iptest 语法错误"
-sh -n files/etc/hotplug.d/iface/90-iptest 2>/dev/null && pass "hotplug脚本语法正确" || fail "hotplug脚本语法错误"
+sh -n files/usr/lib/ipthrottle/core.sh 2>/dev/null && pass "core.sh 语法正确" || fail "core.sh 语法错误"
+sh -n files/usr/lib/ipthrottle/ip.sh 2>/dev/null && pass "ip.sh 语法正确" || fail "ip.sh 语法错误"
+sh -n files/usr/lib/ipthrottle/wan.sh 2>/dev/null && pass "wan.sh 语法正确" || fail "wan.sh 语法错误"
+sh -n files/usr/lib/ipthrottle/schedule.sh 2>/dev/null && pass "schedule.sh 语法正确" || fail "schedule.sh 语法错误"
+sh -n files/usr/sbin/ipthrottle 2>/dev/null && pass "ipthrottle 语法正确" || fail "ipthrottle 语法错误"
+sh -n files/etc/init.d/ipthrottle 2>/dev/null && pass "init.d/ipthrottle 语法正确" || fail "init.d/ipthrottle 语法错误"
+sh -n files/etc/hotplug.d/iface/90-ipthrottle 2>/dev/null && pass "hotplug脚本语法正确" || fail "hotplug脚本语法错误"
 echo
 
 # 测试8: JSON格式验证
 echo "测试 8: JSON文件格式检查"
 menu_json=$(find root/usr/share/luci/menu.d/ -name "*.json" 2>/dev/null | head -1)
-acl_json="root/usr/share/rpcd/acl.d/luci-app-iptest.json"
+acl_json="root/usr/share/rpcd/acl.d/luci-app-ipthrottle.json"
 
 if command -v jq >/dev/null 2>&1; then
     [ -f "$menu_json" ] && jq . "$menu_json" >/dev/null 2>&1 && pass "菜单JSON格式正确" || fail "菜单JSON格式错误"
@@ -118,7 +118,7 @@ echo
 # 测试9: Makefile检查
 echo "测试 9: Makefile检查"
 [ -f "Makefile" ] && pass "Makefile存在" || fail "Makefile缺失"
-if grep -q "PKG_NAME:=iptest" Makefile 2>/dev/null; then
+if grep -q "PKG_NAME:=ipthrottle" Makefile 2>/dev/null; then
     pass "Makefile包含正确的包名"
 else
     fail "Makefile包名错误"

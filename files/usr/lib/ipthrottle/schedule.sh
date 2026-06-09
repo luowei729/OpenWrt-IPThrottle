@@ -1,13 +1,13 @@
 #!/bin/sh
 # ==========================================
 # OpenWrt-IPThrottle 时间计划校验模块
-# 文件: /usr/lib/iptest/schedule.sh
+# 文件: /usr/lib/ipthrottle/schedule.sh
 # 功能: 解析 schedule_json、判断当前时间是否在生效范围内
 # 创建时间: 2026-06-09
 # ==========================================
 
 # 日志标签
-IPT_SCHEDULE_LOG_TAG="iptest-schedule"
+IPT_LOG_TAG="ipthrottle-schedule"
 
 # 记录日志
 # 参数: $1=日志级别, $2=日志消息
@@ -191,7 +191,7 @@ check_rule_should_active() {
     
     # 读取 schedule_type
     local schedule_type
-    schedule_type=$(uci -q get iptest."$rule".schedule_type)
+    schedule_type=$(uci -q get ipthrottle."$rule".schedule_type)
     
     # "always" 或空值表示全天生效
     if [ -z "$schedule_type" ] || [ "$schedule_type" = "always" ]; then
@@ -201,7 +201,7 @@ check_rule_should_active() {
     # "weekly" 需要检查 schedule_json
     if [ "$schedule_type" = "weekly" ]; then
         local schedule_json
-        schedule_json=$(uci -q get iptest."$rule".schedule_json)
+        schedule_json=$(uci -q get ipthrottle."$rule".schedule_json)
         
         if check_schedule_active "$schedule_json"; then
             return 0
@@ -222,21 +222,21 @@ check_rule_should_active() {
 # 实现思路: 
 #   1. 遍历所有 enabled=1 的规则
 #   2. 对每个规则，检查当前应该生效还是失效
-#   3. 与上次状态（保存在 /tmp/iptest_<rule>.status）对比
+#   3. 与上次状态（保存在 /tmp/ipthrottle_<rule>.status）对比
 #   4. 如果状态变化，记录到列表并更新状态文件
 check_all_rules_status() {
     local changed=0
-    local status_dir="/tmp/iptest_status"
+    local status_dir="/tmp/ipthrottle_status"
     
     # 创建状态目录
     mkdir -p "$status_dir"
     
     # 遍历所有规则
     local config
-    for config in $(uci -q show iptest | grep '=rule$' | cut -d. -f2 | cut -d= -f1); do
+    for config in $(uci -q show ipthrottle | grep '=rule$' | cut -d. -f2 | cut -d= -f1); do
         # 跳过 disabled 规则
         local enabled
-        enabled=$(uci -q get iptest."$config".enabled)
+        enabled=$(uci -q get ipthrottle."$config".enabled)
         [ "$enabled" = "1" ] || continue
         
         # 检查当前应该生效还是失效

@@ -1,13 +1,13 @@
 #!/bin/sh
 # ==========================================
 # OpenWrt-IPThrottle WAN 接口管理模块
-# 文件: /usr/lib/iptest/wan.sh
+# 文件: /usr/lib/ipthrottle/wan.sh
 # 功能: WAN 接口发现、带宽获取、接口验证
 # 创建时间: 2026-06-09
 # ==========================================
 
 # 日志标签
-IPT_WAN_LOG_TAG="iptest-wan"
+IPT_LOG_TAG="ipthrottle-wan"
 
 # 记录日志
 # 参数: $1=日志级别, $2=日志消息
@@ -106,7 +106,7 @@ get_wan_device() {
 # 实现原因: tc htb 根 class 需要设置总带宽上限，优先自动检测，失败则使用 UCI 配置值
 # 实现思路: 
 #   1. 优先通过 ubus 自动检测（适用于 DHCP/PPPoE 等可获取协商速率的场景）
-#   2. 自动检测失败时，回退到 UCI 配置 iptest.@global[0].${iface}_${direction}_mbps
+#   2. 自动检测失败时，回退到 UCI 配置 ipthrottle.@global[0].${iface}_${direction}_mbps
 #   3. UCI 配置也不存在时，使用默认值 100 Mbps
 get_wan_bandwidth() {
     local iface="$1"
@@ -123,7 +123,7 @@ get_wan_bandwidth() {
     
     # 自动检测失败，使用 UCI 配置
     local uci_bw
-    uci_bw=$(uci -q get iptest.@global[0]."${iface}_${direction}_mbps")
+    uci_bw=$(uci -q get ipthrottle.@global[0]."${iface}_${direction}_mbps")
     
     if [ -n "$uci_bw" ] && [ "$uci_bw" -gt 0 ] 2>/dev/null; then
         wan_log_msg "WARN" "Auto-detect failed for $iface $direction, using UCI config: ${uci_bw}Mbps"

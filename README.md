@@ -42,30 +42,30 @@
 
 ```bash
 opkg update
-opkg install iptest
+opkg install IPThrottle
 ```
 
 ### 方法二：手动安装
 
 ```bash
 # 下载最新的IPK包
-wget https://github.com/your-repo/iptest/releases/latest/download/iptest_1.0.0_all.ipk
+wget https://github.com/your-repo/IPThrottle/releases/latest/download/ipthrottle_1.0.0_all.ipk
 
 # 安装
-opkg install iptest_1.0.0_all.ipk
+opkg install ipthrottle_1.0.0_all.ipk
 ```
 
 ### 方法三：源码编译
 
 ```bash
 # 克隆源码
-git clone https://github.com/your-repo/iptest.git
+git clone https://github.com/your-repo/IPThrottle.git
 
 # 进入目录
-cd iptest
+cd IPThrottle
 
 # 编译（需要OpenWrt SDK环境）
-make package/iptest/compile V=s
+make package/IPThrottle/compile V=s
 ```
 
 ## 快速开始
@@ -73,15 +73,15 @@ make package/iptest/compile V=s
 ### 1. 启动服务
 
 ```bash
-/etc/init.d/iptest start
-/etc/init.d/iptest enable
+/etc/init.d/IPThrottle start
+/etc/init.d/IPThrottle enable
 ```
 
 ### 2. 访问Web界面
 
 打开浏览器，访问：
 ```
-http://192.168.1.1/cgi-bin/luci/admin/network/iptest
+http://192.168.1.1/cgi-bin/luci/admin/network/IPThrottle
 ```
 
 默认位置：**网络 - IP限速**
@@ -181,22 +181,22 @@ http://192.168.1.1/cgi-bin/luci/admin/network/iptest
 ### 基本操作
 
 ```bash
-/etc/init.d/iptest start
-/etc/init.d/iptest stop
-/etc/init.d/iptest restart
-/etc/init.d/iptest status
-/etc/init.d/iptest enable
-/etc/init.d/iptest disable
+/etc/init.d/IPThrottle start
+/etc/init.d/IPThrottle stop
+/etc/init.d/IPThrottle restart
+/etc/init.d/IPThrottle status
+/etc/init.d/IPThrottle enable
+/etc/init.d/IPThrottle disable
 ```
 
 ### 高级操作
 
 ```bash
-/usr/sbin/iptest apply
-/usr/sbin/iptest clear
-/usr/sbin/iptest reload
-/usr/sbin/iptest status
-/usr/sbin/iptest schedule
+/usr/sbin/IPThrottle apply
+/usr/sbin/IPThrottle clear
+/usr/sbin/IPThrottle reload
+/usr/sbin/IPThrottle status
+/usr/sbin/IPThrottle schedule
 ```
 
 ## 故障排除
@@ -211,14 +211,14 @@ opkg list-installed | grep -E "tc|nftables"
 opkg install tc nftables kmod-sched-core kmod-sched-htb
 
 # 查看启动日志
-logread | grep iptest
+logread | grep IPThrottle
 ```
 
 ### 问题2：LuCI界面找不到
 
 ```bash
 # 重新安装LuCI组件
-opkg install luci-app-iptest
+opkg install luci-app-IPThrottle
 
 # 重启Web服务器
 /etc/init.d/uhttpd restart
@@ -228,19 +228,19 @@ opkg install luci-app-iptest
 
 ```bash
 # 确认服务正在运行
-/etc/init.d/iptest status
+/etc/init.d/IPThrottle status
 
 # 检查规则是否正确加载
-/usr/sbin/iptest status
+/usr/sbin/IPThrottle status
 
 # 查看nftables规则
-nft list ruleset | grep iptest
+nft list ruleset | grep IPThrottle
 
 # 查看tc队列
 tc qdisc show
 
 # 检查日志
-logread | grep iptest
+logread | grep IPThrottle
 ```
 
 ## 性能指标

@@ -28,11 +28,11 @@
 - ip.sh 存在
 - wan.sh 存在
 - schedule.sh 存在
-- iptest 主程序存在
+- ipthrottle 主程序存在
 
 ### ✅ 服务脚本检查 (3/3 通过)
-- init.d/iptest 存在
-- cron.d/iptest 存在
+- init.d/ipthrottle 存在
+- cron.d/ipthrottle 存在
 - hotplug脚本存在
 
 ### ✅ 配置文件检查 (1/1 通过)
@@ -48,8 +48,8 @@
 - ip.sh 可执行
 - wan.sh 可执行
 - schedule.sh 可执行
-- iptest 可执行
-- init.d/iptest 可执行
+- ipthrottle 可执行
+- init.d/ipthrottle 可执行
 
 ### ✅ JSON格式检查 (2/2 通过)
 - 菜单JSON格式正确
@@ -108,7 +108,7 @@
 ### 2. 构建和安装
 ```bash
 # 构建IPK包
-make package/iptest/compile V=s
+make package/ipthrottle/compile V=s
 
 # 或手动安装到目标设备
 scp -r files/* root@192.168.1.1:/
@@ -123,25 +123,25 @@ opkg update
 opkg install iptables-mod-nft-extra tc
 
 # 复制文件到正确位置（如果手动安装）
-cp -r /usr/lib/iptest/*.sh /usr/lib/iptest/
-chmod +x /usr/lib/iptest/*.sh
-chmod +x /usr/sbin/iptest
-/etc/init.d/iptest start
+cp -r /usr/lib/ipthrottle/*.sh /usr/lib/ipthrottle/
+chmod +x /usr/lib/ipthrottle/*.sh
+chmod +x /usr/sbin/ipthrottle
+/etc/init.d/ipthrottle start
 
 # 启用开机自启
-/etc/init.d/iptest enable
+/etc/init.d/ipthrottle enable
 ```
 
 ### 4. 验证部署
 ```bash
 # 检查服务状态
-/etc/init.d/iptest status
+/etc/init.d/ipthrottle status
 
 # 检查配置
-cat /etc/config/iptest
+cat /etc/config/ipthrottle
 
 # 检查LuCI界面
-# 访问 http://192.168.1.1/cgi-bin/luci/admin/network/iptest
+# 访问 http://192.168.1.1/cgi-bin/luci/admin/network/ipthrottle
 ```
 
 ## 下一步行动

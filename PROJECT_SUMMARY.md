@@ -29,14 +29,14 @@
 - ✅ IP 地址解析模块 (ip.sh) - 168行
 - ✅ WAN 发现模块 (wan.sh) - 约200行
 - ✅ 时间计划模块 (schedule.sh) - 约280行
-- ✅ CLI 入口脚本 (iptest) - 约150行
-- ✅ PROCD 服务脚本 (init.d/iptest)
+- ✅ CLI 入口脚本 (ipthrottle) - 约150行
+- ✅ PROCD 服务脚本 (init.d/ipthrottle)
 - ✅ Hotplug 网络事件处理
 - ✅ Cron 定时任务
 - ✅ UCI 配置管理
 
 ### 2.3 LuCI Web 界面 ✅
-- ✅ 规则列表页 (iptest.js)
+- ✅ 规则列表页 (ipthrottle.js)
 - ✅ 规则编辑表单
 - ✅ 动态 IP 地址输入
 - ✅ 星期时间选择器
@@ -106,7 +106,7 @@
                 │
 ┌───────────────▼─────────────────────┐
 │  UCI 配置层                          │
-│  - /etc/config/iptest                │
+│  - /etc/config/ipthrottle                │
 │  - 规则存储和读取                    │
 └───────────────┬─────────────────────┘
                 │
@@ -165,7 +165,7 @@ TC Class 层次:
 数据包进入
     │
     ▼
-NFTABLES (iptables)
+NFTABLES (ipthrottle)
     │ - 匹配源IP地址
     │ - 设置 firewall mark
     ▼
@@ -222,57 +222,57 @@ TC (Traffic Control)
 ```bash
 # 1. 在OpenWrt SDK中编译
 cd /path/to/openwrt-sdk
-cp -r /path/to/OpenWrt-IPThrottle package/iptest
-make package/iptest/compile V=s
+cp -r /path/to/OpenWrt-IPThrottle package/ipthrottle
+make package/ipthrottle/compile V=s
 
 # 2. 传输IPK包到路由器
-scp bin/packages/*/base/iptest_*.ipk root@192.168.1.1:/tmp/
+scp bin/packages/*/base/ipthrottle_*.ipk root@192.168.1.1:/tmp/
 
 # 3. 安装
 ssh root@192.168.1.1
 opkg update
-opkg install /tmp/iptest_*.ipk
+opkg install /tmp/ipthrottle_*.ipk
 
 # 4. 启动服务
-/etc/init.d/iptest enable
-/etc/init.d/iptest start
+/etc/init.d/ipthrottle enable
+/etc/init.d/ipthrottle start
 ```
 
 #### 方法二: 手动安装
 ```bash
 # 1. 创建目录结构
-mkdir -p /usr/lib/iptest
+mkdir -p /usr/lib/ipthrottle
 mkdir -p /www/luci-static/resources/view
 
 # 2. 复制文件
-scp files/usr/lib/iptest/*.sh root@192.168.1.1:/usr/lib/iptest/
-scp files/usr/sbin/iptest root@192.168.1.1:/usr/sbin/
-scp root/www/luci-static/resources/view/iptest.js \
+scp files/usr/lib/ipthrottle/*.sh root@192.168.1.1:/usr/lib/ipthrottle/
+scp files/usr/sbin/ipthrottle root@192.168.1.1:/usr/sbin/
+scp root/www/luci-static/resources/view/ipthrottle.js \
     root@192.168.1.1:/www/luci-static/resources/view/
 
 # 3. 设置权限
-chmod +x /usr/lib/iptest/*.sh
-chmod +x /usr/sbin/iptest
+chmod +x /usr/lib/ipthrottle/*.sh
+chmod +x /usr/sbin/ipthrottle
 
 # 4. 初始化配置 (如果不存在)
-[ -f /etc/config/iptest ] || cp files/etc/config/iptest /etc/config/
+[ -f /etc/config/ipthrottle ] || cp files/etc/config/ipthrottle /etc/config/
 
 # 5. 启动服务
-/etc/init.d/iptest enable
-/etc/init.d/iptest start
+/etc/init.d/ipthrottle enable
+/etc/init.d/ipthrottle start
 ```
 
 ### 7.3 验证安装
 
 ```bash
 # 检查服务状态
-/etc/init.d/iptest status
+/etc/init.d/ipthrottle status
 
 # 查看当前规则
-/usr/sbin/iptest status
+/usr/sbin/ipthrottle status
 
 # 访问LuCI界面
-# http://192.168.1.1/cgi-bin/luci/admin/network/iptest
+# http://192.168.1.1/cgi-bin/luci/admin/network/ipthrottle
 ```
 
 ---
@@ -326,7 +326,7 @@ lsmod | grep sch_htb
 modprobe sch_htb
 
 # 查看日志
-logread | grep iptest
+logread | grep ipthrottle
 ```
 
 **问题: 限速不生效**
@@ -335,10 +335,10 @@ logread | grep iptest
 tc qdisc show
 
 # 检查NFTABLES规则
-nft list ruleset | grep iptest
+nft list ruleset | grep ipthrottle
 
 # 验证配置
-/usr/sbin/iptest status
+/usr/sbin/ipthrottle status
 ```
 
 **问题: LuCI界面无法访问**
@@ -348,28 +348,28 @@ nft list ruleset | grep iptest
 
 # 清除浏览器缓存
 # 检查文件权限
-ls -l /www/luci-static/resources/view/iptest.js
+ls -l /www/luci-static/resources/view/ipthrottle.js
 ```
 
 ### 9.2 调试命令
 
 ```bash
 # 查看详细状态
-/usr/sbin/iptest status
+/usr/sbin/ipthrottle status
 
 # 测试IP解析
-. /usr/lib/iptest/ip.sh
+. /usr/lib/ipthrottle/ip.sh
 ip_range_expand "192.168.1.10" "192.168.1.15"
 
 # 查看WAN接口
-. /usr/lib/iptest/wan.sh
+. /usr/lib/ipthrottle/wan.sh
 get_wan_interfaces
 
 # 手动应用规则
-/usr/sbin/iptest apply
+/usr/sbin/ipthrottle apply
 
 # 清除所有规则
-/usr/sbin/iptest clear
+/usr/sbin/ipthrottle clear
 ```
 
 ---
@@ -440,24 +440,24 @@ OpenWrt-IPThrottle/
 ├── files/                           # 目标系统文件
 │   ├── etc/
 │   │   ├── config/
-│   │   │   └── iptest              # UCI默认配置
+│   │   │   └── ipthrottle              # UCI默认配置
 │   │   ├── hotplug.d/iface/
-│   │   │   └── 90-iptest           # 网络事件处理
+│   │   │   └── 90-ipthrottle           # 网络事件处理
 │   │   ├── init.d/
-│   │   │   └── iptest              # PROCD服务脚本
+│   │   │   └── ipthrottle              # PROCD服务脚本
 │   │   └── uci-defaults/
-│   │       └── 50-iptest           # 初始化脚本
+│   │       └── 50-ipthrottle           # 初始化脚本
 │   └── usr/
-│       ├── lib/iptest/
+│       ├── lib/ipthrottle/
 │       │   ├── core.sh             # 核心逻辑 (680行)
 │       │   ├── ip.sh               # IP解析 (168行)
 │       │   ├── schedule.sh         # 时间计划 (280行)
 │       │   └── wan.sh              # WAN发现 (200行)
 │       └── sbin/
-│           └── iptest              # CLI入口 (150行)
+│           └── ipthrottle              # CLI入口 (150行)
 ├── root/                            # Web界面文件
 │   └── www/luci-static/resources/view/
-│       └── iptest.js               # LuCI前端 (100行)
+│       └── ipthrottle.js               # LuCI前端 (100行)
 ├── Makefile                         # OpenWrt包构建
 ├── README.md                        # 用户手册
 ├── DESIGN.md                        # 设计文档 (663行)

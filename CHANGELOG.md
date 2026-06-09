@@ -42,10 +42,10 @@
   - 带宽使用情况统计
 
 - 命令行工具
-  - iptest status - 查看规则状态
-  - iptest reload - 重新加载规则
-  - iptest stop - 停止所有规则
-  - iptest help - 显示帮助信息
+  - ipthrottle status - 查看规则状态
+  - ipthrottle reload - 重新加载规则
+  - ipthrottle stop - 停止所有规则
+  - ipthrottle help - 显示帮助信息
 
 - 文档和测试
   - 完整的README.md使用文档
@@ -66,7 +66,7 @@
   - ip.sh: IP地址解析模块
   - wan.sh: WAN接口管理模块
   - schedule.sh: 时间计划模块
-  - iptest-daemon: 守护进程
+  - ipthrottle-daemon: 守护进程
 
 - **性能优化**:
   - 规则缓存机制
@@ -118,34 +118,34 @@
 
 1. **备份当前配置**:
    ```bash
-   cp /etc/config/iptest /etc/config/iptest.backup
+   cp /etc/config/ipthrottle /etc/config/ipthrottle.backup
    ```
 
 2. **停止服务**:
    ```bash
-   /etc/init.d/iptest stop
+   /etc/init.d/ipthrottle stop
    ```
 
 3. **安装新版本**:
    ```bash
    opkg update
-   opkg install iptest
+   opkg install ipthrottle
    ```
 
 4. **迁移配置**:
    - 新版本使用新的配置格式
    - 旧的配置文件会被自动迁移
-   - 检查 `/etc/config/iptest` 确认配置正确
+   - 检查 `/etc/config/ipthrottle` 确认配置正确
 
 5. **启动服务**:
    ```bash
-   /etc/init.d/iptest start
-   /etc/init.d/iptest enable
+   /etc/init.d/ipthrottle start
+   /etc/init.d/ipthrottle enable
    ```
 
 6. **验证功能**:
    ```bash
-   iptest status
+   ipthrottle status
    ```
 
 ### 注意事项
@@ -190,9 +190,9 @@
 
 如有问题或建议，请通过以下方式联系：
 
-- **GitHub Issues**: https://github.com/yourusername/openwrt-iptest/issues
+- **GitHub Issues**: https://github.com/yourusername/openwrt-ipthrottle/issues
 - **开发者邮箱**: developer@example.com
-- **开发群组**: https://group.example.com/openwrt-iptest
+- **开发群组**: https://group.example.com/openwrt-ipthrottle
 
 ---
 

@@ -1,17 +1,17 @@
 #!/bin/sh
 # ==========================================
 # OpenWrt-IPThrottle IP 地址解析模块
-# 文件: /usr/lib/iptest/ip.sh
+# 文件: /usr/lib/ipthrottle/ip.sh
 # 功能: IP 地址格式验证、IP段展开、IP段转CIDR
 # 创建时间: 2026-06-09
 # ==========================================
 
 # 日志标签
-IPT_IP_LOG_TAG="iptest-ip"
+IPT_LOG_TAG="ipthrottle-ip"
 
 # 记录日志
 # 参数: $1=日志级别, $2=日志消息
-ip_log_msg() {
+ipt_log_msg() {
     logger -t "$IPT_IP_LOG_TAG" "$1: $2"
 }
 
@@ -94,7 +94,7 @@ ip_range_expand() {
     
     # 验证起止 IP 合法性
     if ! ip_validate "$start_ip" || ! ip_validate "$end_ip"; then
-        ip_log_msg "ERROR" "Invalid IP in range: $range"
+        ipt_log_msg "ERROR" "Invalid IP in range: $range"
         return 1
     fi
     
@@ -106,7 +106,7 @@ ip_range_expand() {
     
     # 检查 start <= end
     if [ "$start_int" -gt "$end_int" ]; then
-        ip_log_msg "ERROR" "IP range start > end: $range"
+        ipt_log_msg "ERROR" "IP range start > end: $range"
         return 1
     fi
     
@@ -135,7 +135,7 @@ ip_entry_parse() {
             if ip_validate "$entry"; then
                 echo "$entry"
             else
-                ip_log_msg "ERROR" "Invalid single IP: $entry"
+                ipt_log_msg "ERROR" "Invalid single IP: $entry"
                 return 1
             fi
             ;;
@@ -150,7 +150,7 @@ ip_entries_for_rule() {
     local rule="$1"
     # 读取 UCI list
     local entries
-    entries=$(uci -q get iptest."$rule".ip_entry)
+    entries=$(uci -q get ipthrottle."$rule".ip_entry)
     [ -z "$entries" ] && return
     
     local entry
