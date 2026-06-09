@@ -18,21 +18,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - x86_64
         include:
           # OpenWrt 23.05.0：输出 .ipk 格式（opkg 包管理器）
-          - openwrt_version: '23.05.0'
+          - arch: 'x86_64'
+            openwrt_version: '23.05.0'
             pkg_format: 'ipk'
             sdk_compress: 'tar.xz'
           
           # OpenWrt 24.10.0：输出 .ipk 格式（opkg 包管理器）
-          - openwrt_version: '24.10.0'
+          - arch: 'x86_64'
+            openwrt_version: '24.10.0'
             pkg_format: 'ipk'
             sdk_compress: 'tar.zst'
           
           # OpenWrt SNAPSHOT：输出 .apk 格式（apk 包管理器）
-          - openwrt_version: 'SNAPSHOT'
+          - arch: 'x86_64'
+            openwrt_version: 'SNAPSHOT'
+            pkg_format: 'apk'
+            sdk_compress: 'tar.zst'
+          
+          # OpenWrt SNAPSHOT：输出 .apk 格式（apk 包管理器）
+          - arch: 'x86_64'
+            openwrt_version: 'SNAPSHOT'
+            pkg_format: 'apk'
+            sdk_compress: 'tar.zst'
+          
+          # OpenWrt SNAPSHOT：输出 .apk 格式（apk 包管理器）
+          - arch: 'x86_64'
+            openwrt_version: 'SNAPSHOT'
             pkg_format: 'apk'
             sdk_compress: 'tar.zst'
     
