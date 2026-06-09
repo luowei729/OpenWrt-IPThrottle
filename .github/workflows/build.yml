@@ -31,9 +31,9 @@ jobs:
             pkg_format: 'ipk'
             sdk_compress: 'tar.zst'
           
-          # OpenWrt SNAPSHOT (即 25.x 开发版)：输出 .apk 格式（apk 包管理器）
+          # OpenWrt 25.12.0：输出 .apk 格式（apk 包管理器）
           - arch: 'x86_64'
-            openwrt_version: 'SNAPSHOT'
+            openwrt_version: '25.12.0'
             pkg_format: 'apk'
             sdk_compress: 'tar.zst'
     
@@ -239,39 +239,53 @@ jobs:
           ARCH="${{ matrix.arch }}"
           VERSION="${{ matrix.openwrt_version }}"
           
-          # 创建产物目录（区分 ipk/apk 格式）
-          mkdir -p "artifacts/${ARCH}-${PKG_FORMAT}"
+          # 创建产物目录
+          mkdir -p artifacts
           
-          # 收集包文件（ipk 或 apk）
-          find openwrt-sdk/bin/packages/ -name "ipthrottle*.$PKG_FORMAT" -exec cp {} "artifacts/${ARCH}-${PKG_FORMAT}/" \;
+          # 查找并复制包文件，重命名为简洁格式
+          # 例如: ipthrottle-1.0.0-2_all.ipk → ipthrottle-23.05.0.ipk
+          PKG_FILE=$(find openwrt-sdk/bin/packages/ -name "ipthrottle*.$PKG_FORMAT" -type f | head -1)
+          if [ -n "$PKG_FILE" ]; then
+            # 根据包格式生成目标文件名
+            if [ "$PKG_FORMAT" = "ipk" ]; then
+              TARGET_NAME="ipthrottle-${VERSION}.ipk"
+            else
+              TARGET_NAME="ipthrottle-${VERSION}.apk"
+            fi
+            cp "$PKG_FILE" "artifacts/$TARGET_NAME"
+            echo "✅ 收集包文件: $TARGET_NAME"
+          else
+            echo "❌ 未找到包文件"
+            exit 1
+          fi
           
           # 收集签名文件
           for sig_file in Packages.sig Packages.json.sig index.json.sig; do
-            find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} "artifacts/${ARCH}-${PKG_FORMAT}/" \; 2>/dev/null || true
+            find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} artifacts/ \; 2>/dev/null || true
           done
           
           # 根据包格式收集对应的公钥
           if [ "$PKG_FORMAT" = "ipk" ]; then
             # ipk 使用 usign (ed25519)
             if [ -f openwrt-sdk/key-build.ucert ]; then
-              cp openwrt-sdk/key-build.ucert "artifacts/${ARCH}-${PKG_FORMAT}/"
+              cp openwrt-sdk/key-build.ucert artifacts/key-build.ucert
               echo "✅ 收集 usign 公钥: key-build.ucert"
             fi
           elif [ "$PKG_FORMAT" = "apk" ]; then
             # apk 使用 RSA
             if [ -f openwrt-sdk/public-key.pem ]; then
-              cp openwrt-sdk/public-key.pem "artifacts/${ARCH}-${PKG_FORMAT}/"
+              cp openwrt-sdk/public-key.pem artifacts/public-key.pem
               echo "✅ 收集 RSA 公钥: public-key.pem"
             fi
           fi
           
-          ls -lh "artifacts/${ARCH}-${PKG_FORMAT}/"
+          ls -lh artifacts/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ipthrottle-${{ matrix.arch }}-${{ matrix.pkg_format }}-${{ matrix.openwrt_version }}
-          path: artifacts/${{ matrix.arch }}-${{ matrix.pkg_format }}/
+          name: ipthrottle-${{ matrix.openwrt_version }}
+          path: artifacts/
           retention-days: 30
 
   release:

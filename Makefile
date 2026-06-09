@@ -12,10 +12,12 @@ define Package/ipthrottle
   SECTION:=net
   CATEGORY:=Network
   TITLE:=IP throttling control for OpenWrt
-  # 用户空间工具（硬性依赖，固件不一定预装，必须安装）
-  # 内核模块（kmod-sched/htb/nft-core）不设硬依赖，因部分固件已内置到内核
-  # 运行时会自动检测并通过 opkg 安装缺失的内核模块
-  DEPENDS:=+tc +nftables +luci-base
+  # 依赖说明：
+  # - nftables: 用户空间工具，硬性依赖
+  # - luci-base: LuCI 界面框架，硬性依赖
+  # - tc: 流量控制工具，部分固件已内置或包名为 iproute2-tc，运行时检测
+  # - kmod-sched/htb/nft-core: 内核模块，部分固件已内置，运行时检测
+  DEPENDS:=+nftables +luci-base
   PKGARCH:=all
 endef
 
