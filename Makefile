@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ipthrottle
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_MAINTAINER:=OpenWrt IPThrottle Development Team
 PKG_LICENSE:=MIT
 
@@ -12,7 +12,10 @@ define Package/ipthrottle
   SECTION:=net
   CATEGORY:=Network
   TITLE:=IP throttling control for OpenWrt
-  DEPENDS:=+tc +kmod-sched +kmod-sched-htb +kmod-nft-core +nftables +luci-base
+  # 用户空间工具（硬性依赖，固件不一定预装，必须安装）
+  # 内核模块（kmod-sched/htb/nft-core）不设硬依赖，因部分固件已内置到内核
+  # 运行时会自动检测并通过 opkg 安装缺失的内核模块
+  DEPENDS:=+tc +nftables +luci-base
   PKGARCH:=all
 endef
 

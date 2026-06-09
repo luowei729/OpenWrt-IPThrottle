@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+### Fixed
+- 北京时间 2026-06-10 05:15 - 修复 ImmortalWrt/SNAPSHOT 上安装失败问题
+  - 将内核模块依赖（kmod-sched/kmod-sched-htb/kmod-nft-core）从硬依赖改为移除
+  - 原因：这些内核模块在部分固件中已内置到内核，不再是独立 kmod 包
+  - 保留 `tc`/`nftables`/`luci-base` 作为硬依赖（用户空间工具）
+  - PKG_RELEASE 从 1 升至 2
+- 北京时间 2026-06-10 04:58 - CI/CD 构建修复
+  - 修复 matrix 配置中 SNAPSHOT 重复 3 次的问题，现在正确输出 3 个变体：ipk(23.05.0)、ipk(24.10.0)、apk(SNAPSHOT)
+  - APK 包签名已切换为持久化 RSA 密钥（从 GitHub Secrets 读取），不再每次构建随机生成
+  - 签名流程验证通过：ipthrottle-1.0.0-r1.apk 使用 `--sign private-key.pem` 正确签名
+  - 用户首次安装需将 public-key.pem 部署到 `/etc/apk/keys/`，后续升级将自动验证签名
+
 ### Added
 - 待开发的新特性将在这里描述
 
