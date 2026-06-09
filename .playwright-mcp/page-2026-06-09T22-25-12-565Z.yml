@@ -1,0 +1,251 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "ImmortalWrt" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - list [ref=e4]:
+      - listitem [ref=e5]:
+        - link "Status &darr;" [ref=e6] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e7]:
+          - listitem [ref=e8]:
+            - link "Overview" [ref=e9] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/overview
+          - listitem [ref=e10]:
+            - link "Routing" [ref=e11] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/routes
+          - listitem [ref=e12]:
+            - link "Firewall" [ref=e13] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/nftables
+          - listitem [ref=e14]:
+            - link "System Log" [ref=e15] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/logs
+          - listitem [ref=e16]:
+            - link "Processes" [ref=e17] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/processes
+          - listitem [ref=e18]:
+            - link "Realtime Graphs" [ref=e19] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/realtime
+      - listitem [ref=e20]:
+        - link "System &darr;" [ref=e21] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e22]:
+          - listitem [ref=e23]:
+            - link "System" [ref=e24] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/system
+          - listitem [ref=e25]:
+            - link "Administration" [ref=e26] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/admin
+          - listitem [ref=e27]:
+            - link "Software" [ref=e28] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/package-manager
+          - listitem [ref=e29]:
+            - link "Startup" [ref=e30] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/startup
+          - listitem [ref=e31]:
+            - link "Scheduled Tasks" [ref=e32] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/crontab
+          - listitem [ref=e33]:
+            - link "Mount Points" [ref=e34] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/mounts
+          - listitem [ref=e35]:
+            - link "Attended Sysupgrade" [ref=e36] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/attendedsysupgrade
+          - listitem [ref=e37]:
+            - link "Backup / Flash Firmware" [ref=e38] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/flash
+          - listitem [ref=e39]:
+            - link "Reboot" [ref=e40] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/reboot
+      - listitem [ref=e41]:
+        - link "Network &darr;" [ref=e42] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e43]:
+          - listitem [ref=e44]:
+            - link "Interfaces" [ref=e45] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/network
+          - listitem [ref=e46]:
+            - link "Routing" [ref=e47] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/routes
+          - listitem [ref=e48]:
+            - link "DHCP and DNS" [ref=e49] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/dhcp
+          - listitem [ref=e50]:
+            - link "Diagnostics" [ref=e51] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/diagnostics
+          - listitem [ref=e52]:
+            - link "IPThrottle" [ref=e53] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/ipthrottle
+          - listitem [ref=e54]:
+            - link "Firewall" [ref=e55] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/firewall
+      - listitem [ref=e56]:
+        - link "Log out" [ref=e57] [cursor=pointer]:
+          - /url: /cgi-bin/luci/admin/logout
+    - generic [ref=e58]: Refreshing
+  - generic [ref=e59]:
+    - generic [ref=e60]:
+      - heading "No password set!" [level=4] [ref=e61]
+      - paragraph [ref=e62]: There is no password set on this router. Please configure a root password to protect the web interface.
+      - link "Go to password configuration..." [ref=e64] [cursor=pointer]:
+        - /url: /cgi-bin/luci/admin/system/admin
+    - heading "Status" [level=2] [ref=e65]
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - heading "System" [level=3] [ref=e68]
+        - table [ref=e70]:
+          - row "Hostname ImmortalWrt" [ref=e71]:
+            - cell "Hostname" [ref=e72]
+            - cell "ImmortalWrt" [ref=e73]
+          - row "Model QEMU Standard PC (i440FX + PIIX, 1996)" [ref=e74]:
+            - cell "Model" [ref=e75]
+            - cell "QEMU Standard PC (i440FX + PIIX, 1996)" [ref=e76]
+          - row "Architecture Genuine Intel(R) CPU 0000 @ 2.10GHz x 16C 16T (2099.944MHz)" [ref=e77]:
+            - cell "Architecture" [ref=e78]
+            - cell "Genuine Intel(R) CPU 0000 @ 2.10GHz x 16C 16T (2099.944MHz)" [ref=e79]
+          - row "Target Platform x86/64" [ref=e80]:
+            - cell "Target Platform" [ref=e81]
+            - cell "x86/64" [ref=e82]
+          - row "Firmware Version ImmortalWrt 24.10.6 r33869-cf234f8de6d5 / LuCI openwrt-24.10 branch 26.114.29114~adb3df4" [ref=e83]:
+            - cell "Firmware Version" [ref=e84]
+            - cell "ImmortalWrt 24.10.6 r33869-cf234f8de6d5 / LuCI openwrt-24.10 branch 26.114.29114~adb3df4" [ref=e85]
+          - row "Kernel Version 6.6.133" [ref=e86]:
+            - cell "Kernel Version" [ref=e87]
+            - cell "6.6.133" [ref=e88]
+          - row "Local Time 2026-06-10 06:25:33" [ref=e89]:
+            - cell "Local Time" [ref=e90]
+            - cell "2026-06-10 06:25:33" [ref=e91]
+          - row "Uptime 1h 4m 15s" [ref=e92]:
+            - cell "Uptime" [ref=e93]
+            - cell "1h 4m 15s" [ref=e94]
+          - row "Load Average 0.00, 0.00, 0.00" [ref=e95]:
+            - cell "Load Average" [ref=e96]
+            - cell "0.00, 0.00, 0.00" [ref=e97]
+          - row "CPU usage (%) 0%" [ref=e98]:
+            - cell "CPU usage (%)" [ref=e99]
+            - cell "0%" [ref=e100]
+      - generic [ref=e104]:
+        - text: Look online for upgrades upon status page load
+        - checkbox [ref=e105] [cursor=pointer]
+      - generic [ref=e106]:
+        - heading "Memory" [level=3] [ref=e107]
+        - table [ref=e109]:
+          - row "Total Available 851.30 MiB / 972.52 MiB (87%)" [ref=e110]:
+            - cell "Total Available" [ref=e111]
+            - cell "851.30 MiB / 972.52 MiB (87%)" [ref=e112]:
+              - generic "851.30 MiB / 972.52 MiB (87%)" [ref=e113]: 851.30 MiB / 972.52 MiB (87%)
+          - row "Used 115.73 MiB / 972.52 MiB (11%)" [ref=e115]:
+            - cell "Used" [ref=e116]
+            - cell "115.73 MiB / 972.52 MiB (11%)" [ref=e117]:
+              - generic "115.73 MiB / 972.52 MiB (11%)" [ref=e118]: 115.73 MiB / 972.52 MiB (11%)
+          - row "Buffered 2.02 MiB / 972.52 MiB (0%)" [ref=e120]:
+            - cell "Buffered" [ref=e121]
+            - cell "2.02 MiB / 972.52 MiB (0%)" [ref=e122]:
+              - generic "2.02 MiB / 972.52 MiB (0%)" [ref=e123]: 2.02 MiB / 972.52 MiB (0%)
+          - row "Cached 34.37 MiB / 972.52 MiB (3%)" [ref=e124]:
+            - cell "Cached" [ref=e125]
+            - cell "34.37 MiB / 972.52 MiB (3%)" [ref=e126]:
+              - generic "34.37 MiB / 972.52 MiB (3%)" [ref=e127]: 34.37 MiB / 972.52 MiB (3%)
+      - generic [ref=e129]:
+        - heading "Storage" [level=3] [ref=e130]
+        - table [ref=e132]:
+          - row "Disk space 42.47 MiB / 290.41 MiB (14%)" [ref=e133]:
+            - cell "Disk space" [ref=e134]
+            - cell "42.47 MiB / 290.41 MiB (14%)" [ref=e135]:
+              - generic "42.47 MiB / 290.41 MiB (14%)" [ref=e136]: 42.47 MiB / 290.41 MiB (14%)
+          - row "Temp space 196.00 KiB / 486.26 MiB (0%)" [ref=e138]:
+            - cell "Temp space" [ref=e139]
+            - cell "196.00 KiB / 486.26 MiB (0%)" [ref=e140]:
+              - generic "196.00 KiB / 486.26 MiB (0%)" [ref=e141]: 196.00 KiB / 486.26 MiB (0%)
+          - row "/dev/vda1 (/boot) 8.35 MiB / 31.92 MiB (26%)" [ref=e142]:
+            - cell "/dev/vda1 (/boot)" [ref=e143]
+            - cell "8.35 MiB / 31.92 MiB (26%)" [ref=e144]:
+              - generic "8.35 MiB / 31.92 MiB (26%)" [ref=e145]: 8.35 MiB / 31.92 MiB (26%)
+      - generic [ref=e147]:
+        - heading "Port status" [level=3] [ref=e148]
+        - generic [ref=e151]:
+          - generic [ref=e152]: eth0
+          - generic [ref=e153]:
+            - img [ref=e154]
+            - text: 1 GbE
+          - generic [ref=e157]:
+            - text: "Part of network:"
+            - generic [ref=e158]:
+              - generic "Part of zone lan" [ref=e159]
+              - text: "lan:"
+              - 'img "Bridge: \"br-lan\"" [ref=e160]'
+          - generic [ref=e162]:
+            - text: ▲ 3.7 MiB
+            - text: ▼ 28.1 MiB
+            - generic [ref=e164]:
+              - generic [ref=e165]:
+                - strong [ref=e166]: "Received bytes:"
+                - text: 28.11 MiB
+              - generic [ref=e167]:
+                - strong [ref=e168]: "Received packets:"
+                - text: 68.15 KPkts.
+              - generic [ref=e169]:
+                - strong [ref=e170]: "Received multicast:"
+                - text: 65.72 KPkts.
+              - generic [ref=e171]:
+                - strong [ref=e172]: "Receive errors:"
+                - text: 62 Pkts.
+              - generic [ref=e173]:
+                - strong [ref=e174]: "Receive dropped:"
+                - text: 0 Pkts.
+              - generic [ref=e175]:
+                - strong [ref=e176]: "Transmitted bytes:"
+                - text: 3.74 MiB
+              - generic [ref=e177]:
+                - strong [ref=e178]: "Transmitted packets:"
+                - text: 4.18 KPkts.
+              - generic [ref=e179]:
+                - strong [ref=e180]: "Transmit errors:"
+                - text: 0 Pkts.
+              - generic [ref=e181]:
+                - strong [ref=e182]: "Transmit dropped:"
+                - text: 0 Pkts.
+              - generic [ref=e183]:
+                - strong [ref=e184]: "Collisions seen:"
+                - text: "0"
+      - generic [ref=e185]:
+        - heading "Network" [level=3] [ref=e186]
+        - table [ref=e188]:
+          - row "Active Connections 19 / 62464 (0%)" [ref=e189]:
+            - cell "Active Connections" [ref=e190]
+            - cell "19 / 62464 (0%)" [ref=e191]:
+              - generic "19 / 62464 (0%)" [ref=e192]: 19 / 62464 (0%)
+          - row "Online Users 2" [ref=e193]:
+            - cell "Online Users" [ref=e194]
+            - cell "2" [ref=e195]
+      - generic [ref=e197]:
+        - heading "Active DHCP Leases" [level=3] [ref=e198]
+        - table [ref=e199]:
+          - row "Hostname IPv4 address MAC address Lease time remaining Static Lease" [ref=e200]:
+            - columnheader "Hostname" [ref=e201]
+            - columnheader "IPv4 address" [ref=e202]
+            - columnheader "MAC address" [ref=e203]
+            - columnheader "Lease time remaining" [ref=e204]
+            - columnheader "Static Lease" [ref=e205]
+          - row "There are no active leases" [ref=e206]:
+            - cell "There are no active leases" [ref=e207]:
+              - emphasis [ref=e208]: There are no active leases
+        - heading "Active DHCPv6 Leases" [level=3] [ref=e209]
+        - table [ref=e210]:
+          - row "Host IPv6 address DUID Lease time remaining Static Lease" [ref=e211]:
+            - columnheader "Host" [ref=e212]
+            - columnheader "IPv6 address" [ref=e213]
+            - columnheader "DUID" [ref=e214]
+            - columnheader "Lease time remaining" [ref=e215]
+            - columnheader "Static Lease" [ref=e216]
+          - row "There are no active leases" [ref=e217]:
+            - cell "There are no active leases" [ref=e218]:
+              - emphasis [ref=e219]: There are no active leases
+  - contentinfo [ref=e220]:
+    - generic [ref=e221]:
+      - text: Powered by
+      - link "LuCI openwrt-24.10 branch (26.114.29114~adb3df4)" [ref=e222] [cursor=pointer]:
+        - /url: https://github.com/openwrt/luci
+      - text: /
+      - link "ImmortalWrt 24.10.6 (r33869-cf234f8de6d5)" [ref=e223] [cursor=pointer]:
+        - /url: https://immortalwrt.org/
+      - text: / Lua compatibility mode active
