@@ -190,13 +190,19 @@ jobs:
           # 创建制品目录
           mkdir -p artifacts/${{ matrix.arch }}
           
-          # 只收集 ipthrottle 编译产物（排除依赖包）
+          # 收集 ipthrottle 编译产物
           find openwrt-sdk/bin/packages/ -name "ipthrottle*.ipk" -exec cp {} artifacts/${{ matrix.arch }}/ \;
+          
+          # 收集签名文件（OpenWrt 签名机制）
+          # Packages.sig - 索引文件签名
+          # Packages.json.sig 或 index.json.sig - JSON 索引签名
+          for sig_file in Packages.sig Packages.json.sig index.json.sig; do
+            find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} artifacts/${{ matrix.arch }}/ \; 2>/dev/null || true
+          done
           
           # 如果有签名公钥，也一起打包
           if [ -f openwrt-sdk/key-build.ucert ]; then
             cp openwrt-sdk/key-build.ucert artifacts/${{ matrix.arch }}/
-            echo "✅ 签名公钥已收集，部署到 device 用于验证本地包"
           fi
           
           ls -lh artifacts/${{ matrix.arch }}/
