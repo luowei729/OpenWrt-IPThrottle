@@ -1,0 +1,5 @@
+[      61ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://10.0.0.201/cgi-bin/luci/admin/network/ipthrottle:0
+[     339ms] RPCError: RPC call to uci/get failed with error -32002: Access denied
+  at ClassConstructor.handleCallReply (http://10.0.0.201/luci-static/resources/rpc.js?v=26.114.29114~adb3df4-1781042915:11:3)
+    at ClassConstructor.raise (http://10.0.0.201/luci-static/resources/luci.js?v=26.114.29114~adb3df4-1781042915:147:3)
+    at ClassConstructor.handleCallReply (http://10.0.0.201/luci-static/resources/rpc.js?v=26.114.29114~adb3df4-1781042915:11:3)
