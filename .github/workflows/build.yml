@@ -119,6 +119,22 @@ jobs:
           rm openwrt-sdk.tar.xz
           echo "SDK downloaded and extracted successfully"
 
+      - name: Build usign (Signing Tool)
+        run: |
+          # ============================================================
+          # 编译 usign 签名工具：用于 OpenWrt 包签名
+          # Actions 默认不带 usign，需要从源码编译
+          # ============================================================
+          cd /tmp
+          git clone --depth 1 https://git.openwrt.org/project/usign.git
+          cd usign
+          mkdir build && cd build
+          cmake .. && make -j$(nproc)
+          
+          # 复制到全局路径
+          sudo cp usign /usr/local/bin/usign
+          echo "✅ usign 已安装: $(usign --help 2>&1 | head -1)"
+
       - name: Prepare SDK Environment
         run: |
           cd openwrt-sdk
@@ -133,9 +149,25 @@ jobs:
           CONFIG_PACKAGE_luci-mod-admin-full=m
           CONFIG_PACKAGE_tc=m
           CONFIG_PACKAGE_nftables=m
+          CONFIG_SIGNED_PACKAGES=y
           EOF
           
           make defconfig
+
+      - name: Restore Signing Key
+        if: env.OPENWRT_SIGN_KEY != ''
+        env:
+          OPENWRT_SIGN_KEY: ${{ secrets.OPENWRT_SIGN_KEY }}
+        run: |
+          # ============================================================
+          # 从 GitHub Secrets 恢复签名私钥
+          # 文件必须放在 SDK 根目录，命名为 key-build
+          # SDK 编译时会自动调用 usign 进行包签名
+          # ============================================================
+          echo "$OPENWRT_SIGN_KEY" > openwrt-sdk/key-build
+          chmod 600 openwrt-sdk/key-build
+          echo "✅ 签名私钥已恢复到 openwrt-sdk/key-build"
+          echo "包编译时将自动进行 usign 签名"
 
       - name: Install Package Source
         run: |
@@ -150,19 +182,30 @@ jobs:
       - name: Build Package
         run: |
           cd openwrt-sdk
+          # 编译并自动签名（SDK 已配置 CONFIG_SIGNED_PACKAGES=y）
           make package/ipthrottle/compile V=s
 
       - name: Collect Package Files
         run: |
+          # 创建制品目录
           mkdir -p artifacts/${{ matrix.arch }}
-          find openwrt-sdk/bin/packages/${{ matrix.arch }}/ -name "*.ipk" | xargs -I {} cp {} artifacts/${{ matrix.arch }}/
+          
+          # 只收集 ipthrottle 编译产物（排除依赖包）
+          find openwrt-sdk/bin/packages/ -name "ipthrottle*.ipk" -exec cp {} artifacts/${{ matrix.arch }}/ \;
+          
+          # 如果有签名公钥，也一起打包
+          if [ -f openwrt-sdk/key-build.ucert ]; then
+            cp openwrt-sdk/key-build.ucert artifacts/${{ matrix.arch }}/
+            echo "✅ 签名公钥已收集，部署到 device 用于验证本地包"
+          fi
+          
           ls -lh artifacts/${{ matrix.arch }}/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ipthrottle-${{ matrix.arch }}-${{ matrix.openwrt_version }}
-          path: artifacts/${{ matrix.arch }}/*.ipk
+          path: artifacts/${{ matrix.arch }}/
           retention-days: 30
 
   release:
