@@ -1,0 +1,219 @@
+name: Build OpenWrt Package
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: 'OpenWrt version (e.g., 23.05.0)'
+        required: false
+        default: '22.05.0'
+      arch:
+        description: 'Target architecture'
+        required: false
+        default: 'x86_64'
+
+env:
+  PACKAGE_NAME: ipthrottle
+  OPENWRT_VERSION: '22.05.0'
+
+jobs:
+  build:
+    name: Build IPThrottle Package
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - arm_cortex-a7_neon-vfpv4
+          - mips_24kc
+        openwrt_version:
+          - '23.05.0'
+          - '22.05.0'
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          path: ipthrottle
+
+      - name: Install Prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang flex bison g++ gawk \
+            gcc-multilib g++-multilib \
+            gettext git libncurses5-dev \
+            libssl-dev python3-distutils \
+            rsync unzip wget zlib1g-dev \
+            file ecj fakeroot
+
+      - name: Cache OpenWrt SDK
+        id: cache-sdk
+        uses: actions/cache@v3
+        with:
+          path: openwrt-sdk
+          key: openwrt-sdk-${{ matrix.openwrt_version }}-${{ matrix.arch }}-v2
+
+      - name: Download OpenWrt SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          ARCH_PATH=${{ matrix.arch }}
+          SDK_URL="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${ARCH_PATH}/generic/openwrt-sdk-${{ matrix.openwrt_version }}-${ARCH_PATH}_generic.Linux-x86_64.tar.xz"
+          
+          echo "Downloading SDK from: $SDK_URL"
+          wget -q --timeout=300 "$SDK_URL" || {
+            echo "Failed to download SDK, trying alternative path..."
+            SDK_URL="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${ARCH_PATH}/latest/openwrt-sdk-${{ matrix.openwrt_version }}-${ARCH_PATH}_generic.Linux-x86_64.tar.xz"
+            wget -q --timeout=300 "$SDK_URL"
+          }
+          
+          tar -xf openwrt-sdk-*.tar.xz
+          mv openwrt-sdk-* openwrt-sdk
+          rm openwrt-sdk-*.tar.xz
+
+      - name: Prepare SDK Environment
+        run: |
+          cd openwrt-sdk
+          
+          # Update feeds
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          
+          # Configure SDK
+          cat > .config << EOF
+          CONFIG_PACKAGE_luci-base=m
+          CONFIG_PACKAGE_luci-mod-admin-full=m
+          CONFIG_PACKAGE_tc=m
+          CONFIG_PACKAGE_nftables=m
+          EOF
+          
+          make defconfig
+
+      - name: Install Package Source
+        run: |
+          mkdir -p openwrt-sdk/package/ipthrottle
+          cp -r ipthrottle/files/* openwrt-sdk/package/ipthrottle/
+          cp -r ipthrottle/root/* openwrt-sdk/package/ipthrottle/
+          cp ipthrottle/Makefile openwrt-sdk/package/ipthrottle/
+
+      - name: Build Package
+        run: |
+          cd openwrt-sdk
+          make package/ipthrottle/compile V=s
+
+      - name: Collect Package Files
+        run: |
+          mkdir -p artifacts/${{ matrix.arch }}
+          find openwrt-sdk/bin/packages/${{ matrix.arch }}/ -name "*.ipk" | xargs -I {} cp {} artifacts/${{ matrix.arch }}/
+          ls -lh artifacts/${{ matrix.arch }}/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ipthrottle-${{ matrix.arch }}-${{ matrix.openwrt_version }}
+          path: artifacts/${{ matrix.arch }}/*.ipk
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: release-files
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-files/**/*.ipk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Validate Package Structure
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Run Shell Script Syntax Check
+        run: |
+          echo "Checking shell script syntax..."
+          for script in files/usr/lib/ipthrottle/*.sh files/usr/sbin/ipthrottle files/etc/init.d/ipthrottle; do
+            if [ -f "$script" ]; then
+              echo "Checking: $script"
+              bash -n "$script" || {
+                echo "Syntax error in $script"
+                exit 1
+              }
+            fi
+          done
+          echo "✓ All shell scripts passed syntax check"
+
+      - name: Validate JSON Files
+        run: |
+          echo "Validating JSON files..."
+          for json in root/usr/share/luci/menu.d/*.json root/usr/share/rpcd/acl.d/*.json; do
+            if [ -f "$json" ]; then
+              echo "Checking: $json"
+              python3 -m json.tool "$json" > /dev/null || {
+                echo "Invalid JSON: $json"
+                exit 1
+              }
+            fi
+          done
+          echo "✓ All JSON files are valid"
+
+      - name: Check File Structure
+        run: |
+          echo "Verifying package structure..."
+          
+          required_files=(
+            "Makefile"
+            "files/usr/lib/ipthrottle/core.sh"
+            "files/usr/lib/ipthrottle/ip.sh"
+            "files/usr/lib/ipthrottle/wan.sh"
+            "files/usr/lib/ipthrottle/schedule.sh"
+            "files/etc/config/ipthrottle"
+            "files/etc/init.d/ipthrottle"
+            "files/usr/sbin/ipthrottle"
+            "root/usr/share/luci/menu.d/luci-app-ipthrottle.json"
+            "root/etc/luci/uploads/ipthrottle.js"
+          )
+          
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing required file: $file"
+              exit 1
+            fi
+          done
+          
+          echo "✓ Package structure is complete"
+
+      - name: Check UCI Config Format
+        run: |
+          echo "Validating UCI configuration..."
+          
+          if ! grep -q "config ipthrottle" files/etc/config/ipthrottle; then
+            echo "Missing 'config ipthrottle' section"
+            exit 1
+          fi
+          
+          echo "✓ UCI configuration is valid"
