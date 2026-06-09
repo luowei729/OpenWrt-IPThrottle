@@ -60,46 +60,64 @@ jobs:
       - name: Download OpenWrt SDK
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
-          # 确定架构路径
+          # ============================================================
+          # 下载 OpenWrt SDK：根据架构矩阵变量定位正确的 SDK 文件路径
+          # OpenWrt 的架构名称(matrix.arch)与 SDK 文件路径(targets/)不同
+          # 例如 x86_64 在 matrix 中实际路径是 x86/64
+          # ============================================================
+
+          # 根据 CI matrix 架构名映射到 OpenWrt targets 路径和 SDK 文件名前缀
           case "${{ matrix.arch }}" in
             x86_64)
+              # x86_64 架构: 对应 targets/x86/64 子目录，SDK 后缀为 x86-64
               ARCH_PATH="x86/64"
-              SDK_SUFFIX="x86-64"
+              SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-x86-64"
               ;;
             arm_cortex-a7_neon-vfpv4)
+              # ARM Cortex-A7 NEON 架构: 对应 targets/armsr/armv7 子目录
               ARCH_PATH="armsr/armv7"
-              SDK_SUFFIX="armsr-armv7"
+              SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-armsr-armv7"
               ;;
             mips_24kc)
+              # MIPS 24Kc 架构: 对应 targets/ath79/generic 子目录
               ARCH_PATH="ath79/generic"
-              SDK_SUFFIX="ath79-generic"
+              SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-ath79-generic"
               ;;
             *)
+              # 不支持的架构直接报错退出
               echo "Unsupported architecture: ${{ matrix.arch }}"
               exit 1
               ;;
           esac
-          
-          SDK_URL="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${ARCH_PATH}/openwrt-sdk-${{ matrix.openwrt_version }}-${SDK_SUFFIX}_*.tar.xz"
-          
-          echo "Downloading SDK from: $SDK_URL"
-          
-          # 使用通配符下载
-          if ! wget -q --timeout=300 "$SDK_URL" 2>/dev/null; then
-            echo "Direct download failed, trying to find exact filename..."
-            SDK_PAGE="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${ARCH_PATH}/"
-            SDK_FILE=$(wget -q -O - $SDK_PAGE | grep -o 'openwrt-sdk-${{ matrix.openwrt_version }}-${SDK_SUFFIX}_[^"]*\.tar\.xz' | head -1)
-            if [ -n "$SDK_FILE" ]; then
-              wget -q --timeout=300 "${SDK_PAGE}${SDK_FILE}"
-            else
-              echo "Failed to find SDK for ${{ matrix.arch }} on OpenWrt ${{ matrix.openwrt_version }}"
-              exit 1
-            fi
+
+          # SDK 下载页面 URL
+          SDK_PAGE="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/${ARCH_PATH}/"
+          echo "SDK page: $SDK_PAGE"
+
+          # 使用 curl 获取目录列表，用 grep 提取精确的 SDK 文件名
+          # SDK 文件名格式: openwrt-sdk-VER-ARCH_gcc-VER_musl.Linux-HOST.tar.xz
+          SDK_FILE=$(curl -sL "$SDK_PAGE" | grep -oP "${SDK_PREFIX}_[^\"<>]*\.tar\.xz" | head -1)
+
+          if [ -z "$SDK_FILE" ]; then
+            # 文件名提取失败，输出页面内容用于调试
+            echo "ERROR: Failed to find SDK file matching prefix: $SDK_PREFIX"
+            echo "Page content (first 2000 chars):"
+            curl -sL "$SDK_PAGE" | head -c 2000
+            exit 1
           fi
-          
-          tar -xf openwrt-sdk-*.tar.xz
+
+          # 拼接完整下载 URL
+          SDK_URL="${SDK_PAGE}${SDK_FILE}"
+          echo "Downloading SDK: $SDK_URL"
+
+          # 下载 SDK 压缩包（设置 300 秒超时）
+          wget -q --timeout=300 "$SDK_URL" -O openwrt-sdk.tar.xz
+
+          # 解压并标准化目录名
+          tar -xf openwrt-sdk.tar.xz
           mv openwrt-sdk-* openwrt-sdk
-          rm openwrt-sdk-*.tar.xz
+          rm openwrt-sdk.tar.xz
+          echo "SDK downloaded and extracted successfully"
 
       - name: Prepare SDK Environment
         run: |
