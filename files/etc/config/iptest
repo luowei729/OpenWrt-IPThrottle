@@ -1,7 +1,7 @@
 # IPThrottle Configuration File
 # This file is parsed by UCI and iptest daemon
 
-config global
+config iptest 'config'
     option enabled '0'
     option default_upload '1024'
     option default_download '4096'
