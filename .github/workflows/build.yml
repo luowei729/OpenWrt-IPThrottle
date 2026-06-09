@@ -139,9 +139,12 @@ jobs:
 
       - name: Install Package Source
         run: |
+          # 将源码文件按 files/ 和 root/ 目录结构复制到 SDK package 目录
+          # Makefile 使用相对路径 ./files/... 和 ./root/... 来引用这些文件
+          # 所以必须保留 files/ 和 root/ 目录层级结构，不能用通配符展开
           mkdir -p openwrt-sdk/package/ipthrottle
-          cp -r ipthrottle/files/* openwrt-sdk/package/ipthrottle/
-          cp -r ipthrottle/root/* openwrt-sdk/package/ipthrottle/
+          cp -r ipthrottle/files openwrt-sdk/package/ipthrottle/
+          cp -r ipthrottle/root openwrt-sdk/package/ipthrottle/
           cp ipthrottle/Makefile openwrt-sdk/package/ipthrottle/
 
       - name: Build Package
