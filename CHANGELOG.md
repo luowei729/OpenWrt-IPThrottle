@@ -8,6 +8,25 @@
 ## [Unreleased]
 
 ### Fixed
+- 北京时间 2026-06-10 05:45 - 重大重构：时间计划 UI 和字段名统一
+  - **LuCI 视图重构**：将原始 JSON 输入替换为友好的 UI 控件
+    - 新增"生效时间"下拉选择：全天生效(默认) / 自定义时间
+    - 自定义时间时显示：星期多选框 + 开始/结束时间输入
+    - 使用 `depends` 实现条件显示（仅选"自定义时间"时显示详细设置）
+  - **修复字段名不一致问题**（之前 LuCI 和后端完全不匹配，插件无法工作）
+    - `ip_list` → `ip_entry`
+    - `protocol` → `proto`
+    - `limite_mode` → `mode`
+    - `up_mbps` → `upload_kbps`（单位改为 Kbps）
+    - `down_mbps` → `download_kbps`（单位改为 Kbps）
+    - `priority_order` → `priority`
+  - **简化时间计划逻辑**：移除 JSON 解析，改用独立 UCI 字段
+    - `schedule_type`: "always"(全天) 或 "weekly"(自定义)
+    - `schedule_days`: list 类型，0=周日，1-6=周一到周六
+    - `schedule_start`: 开始时间 HH:MM
+    - `schedule_end`: 结束时间 HH:MM
+  - 更新 UCI 默认配置和 uci-defaults 脚本使用新字段名
+  - 更新测试框架移除已废弃的 JSON 验证测试
 - 北京时间 2026-06-10 05:15 - 修复 ImmortalWrt/SNAPSHOT 上安装失败问题
   - 将内核模块依赖（kmod-sched/kmod-sched-htb/kmod-nft-core）从硬依赖改为移除
   - 原因：这些内核模块在部分固件中已内置到内核，不再是独立 kmod 包

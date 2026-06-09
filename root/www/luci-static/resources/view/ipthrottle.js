@@ -41,60 +41,98 @@ return view.extend({
 		o.default = 'all';
 		o.rmempty = false;
 
-		// 内网IP地址
-		o = s.option(form.DynamicList, 'ip_list', _('内网IP地址'));
+		// 内网IP地址（后端字段名: ip_entry）
+		o = s.option(form.DynamicList, 'ip_entry', _('内网IP地址'));
 		o.rmempty = false;
 		o.placeholder = '192.168.1.100';
 		o.datatype = 'ip4addr("true")';
 
-		// IP范围
+		// IP范围（可选，后端直接读取 ip_range）
 		o = s.option(form.Value, 'ip_range', _('IP范围(可选)'));
 		o.placeholder = '192.168.1.100-192.168.1.200';
 		o.rmempty = true;
 
-		// 协议选择
-		o = s.option(form.ListValue, 'protocol', _('协议'));
-		o.value('all', _('全部协议'));
+		// 协议选择（后端字段名: proto）
+		o = s.option(form.ListValue, 'proto', _('协议'));
+		o.value('any', _('全部协议'));
 		o.value('tcp', _('TCP'));
 		o.value('udp', _('UDP'));
 		o.value('tcp+udp', _('TCP+UDP'));
-		o.default = 'all';
+		o.default = 'any';
 		o.rmempty = false;
 
-		// 限速模式
-		o = s.option(form.ListValue, 'limite_mode', _('限速模式'));
-		o.value('independ', _('独立限速(每个IP独立限速)'));
-		o.value('share', _('共享限速(所有IP共享带宽)'));
-		o.default = 'independ';
+		// 限速模式（后端字段名: mode）
+		o = s.option(form.ListValue, 'mode', _('限速模式'));
+		o.value('independent', _('独立限速(每个IP独立限速)'));
+		o.value('shared', _('共享限速(所有IP共享带宽)'));
+		o.default = 'independent';
 		o.rmempty = false;
 
-		// 上传限速
-		o = s.option(form.Value, 'up_mbps', _('上传限速(Mbps)'));
-		o.rmempty = false;
-		o.datatype = 'uinteger';
-		o.placeholder = '100';
-		o.default = '100';
-
-		// 下载限速
-		o = s.option(form.Value, 'down_mbps', _('下载限速(Mbps)'));
+		// 上传限速（后端字段名: upload_kbps，单位 Kbps）
+		o = s.option(form.Value, 'upload_kbps', _('上传限速(Kbps)'));
 		o.rmempty = false;
 		o.datatype = 'uinteger';
-		o.placeholder = '1000';
-		o.default = '1000';
+		o.placeholder = '1024';
+		o.default = '1024';
+		o.description = _('单位: Kbps (1 Mbps = 1024 Kbps)');
 
-		// 优先级
-		o = s.option(form.Value, 'priority_order', _('优先级'));
+		// 下载限速（后端字段名: download_kbps，单位 Kbps）
+		o = s.option(form.Value, 'download_kbps', _('下载限速(Kbps)'));
 		o.rmempty = false;
 		o.datatype = 'uinteger';
-		o.placeholder = '100';
-		o.default = '100';
-		o.description = _('数字越小优先级越高');
+		o.placeholder = '4096';
+		o.default = '4096';
+		o.description = _('单位: Kbps (1 Mbps = 1024 Kbps)');
 
-		// 时间限制
-		o = s.option(form.DynamicList, 'time_condition', _('生效时间'));
+		// 优先级（后端字段名: priority）
+		o = s.option(form.Value, 'priority', _('优先级'));
+		o.rmempty = false;
+		o.datatype = 'uinteger';
+		o.placeholder = '10';
+		o.default = '10';
+		o.description = _('数字越小优先级越高 (1-99)');
+
+		// ==========================================
+		// 生效时间设置（替代原来的 JSON 输入）
+		// ==========================================
+
+		// 时间类型选择：全天生效 / 自定义时间
+		o = s.option(form.ListValue, 'schedule_type', _('生效时间'));
+		o.value('always', _('全天生效(默认)'));
+		o.value('weekly', _('自定义时间'));
+		o.default = 'always';
+		o.rmempty = false;
+		o.description = _('选择"全天生效"则规则始终生效；选择"自定义时间"可指定每周哪几天、几点到几点生效');
+
+		// 生效星期（仅当 schedule_type=weekly 时显示）
+		// 使用 MultiValue 支持多选
+		o = s.option(form.MultiValue, 'schedule_days', _('生效星期'));
+		o.value('1', _('周一'));
+		o.value('2', _('周二'));
+		o.value('3', _('周三'));
+		o.value('4', _('周四'));
+		o.value('5', _('周五'));
+		o.value('6', _('周六'));
+		o.value('0', _('周日'));
+		o.depends('schedule_type', 'weekly');
 		o.rmempty = true;
-		o.placeholder = '[{"d":[1,2,3,4,5],"s":"08:00","e":"22:00"}]';
-		o.description = _('JSON格式：d=星期(0周日,1-6周一到周六), s=开始时间, e=结束时间');
+		o.description = _('不选择任何星期则默认每天生效');
+
+		// 开始时间（仅当 schedule_type=weekly 时显示）
+		o = s.option(form.Value, 'schedule_start', _('开始时间'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.placeholder = '08:00';
+		o.datatype = 'time';
+		o.description = _('格式 HH:MM，不填默认 00:00');
+
+		// 结束时间（仅当 schedule_type=weekly 时显示）
+		o = s.option(form.Value, 'schedule_end', _('结束时间'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.placeholder = '22:00';
+		o.datatype = 'time';
+		o.description = _('格式 HH:MM，不填默认 23:59');
 
 		return m.render();
 	}

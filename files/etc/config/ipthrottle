@@ -1,35 +1,41 @@
-# IPThrottle Configuration File
-# This file is parsed by UCI and ipthrottle daemon
+# IPThrottle 配置文件
+# 由 UCI 系统解析，ipthrottle 守护进程读取
 
+# 全局配置
 config ipthrottle 'config'
     option enabled '0'
-    option default_upload '1024'
-    option default_download '4096'
+    option default_upload_kbps '1024'
+    option default_download_kbps '4096'
 
-# Example rule: Limit single IP
+# 示例规则1：限制单个IP
 config rule
-    option name 'ipthrottle-example-Laptop'
+    option name '示例-笔记本电脑'
     option enabled '0'
     option priority '10'
     option wan_mask 'all'
-    option protocol 'all'
+    option proto 'any'
     option mode 'independent'
-    option upload_mbps '10'
-    option download_mbps '50'
-    list ip_addr '192.168.1.100'
-    option ip_range ''
-    option time_plan '[]'
+    option upload_kbps '512'
+    option download_kbps '2048'
+    list ip_entry '192.168.1.100'
+    option schedule_type 'always'
 
-# Example rule: Limit IP range
+# 示例规则2：限制IP段 + 自定义时间
 config rule
-    option name 'ipthrottle-example-Network-Range'
+    option name '示例-工作日白天限速'
     option enabled '0'
     option priority '20'
     option wan_mask 'all'
-    option protocol 'all'
+    option proto 'tcp'
     option mode 'shared'
-    option upload_mbps '100'
-    option download_mbps '500'
-    list ip_addr '192.168.1.10'
-    option ip_range '192.168.1.100-192.168.1.200'
-    option time_plan '[{"d":[1,2,3,4,5],"s":"09:00","e":"18:00"}]'
+    option upload_kbps '1024'
+    option download_kbps '4096'
+    list ip_entry '192.168.1.10-192.168.1.200'
+    option schedule_type 'weekly'
+    list schedule_days '1'
+    list schedule_days '2'
+    list schedule_days '3'
+    list schedule_days '4'
+    list schedule_days '5'
+    option schedule_start '09:00'
+    option schedule_end '18:00'
