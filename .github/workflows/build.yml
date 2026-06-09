@@ -55,7 +55,7 @@ jobs:
 
       - name: Cache OpenWrt SDK
         id: cache-sdk
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: openwrt-sdk
           key: openwrt-sdk-${{ matrix.openwrt_version }}-${{ matrix.arch }}-v2
@@ -114,7 +114,7 @@ jobs:
           ls -lh artifacts/${{ matrix.arch }}/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ipthrottle-${{ matrix.arch }}-${{ matrix.openwrt_version }}
           path: artifacts/${{ matrix.arch }}/*.ipk
@@ -130,7 +130,7 @@ jobs:
     
     steps:
       - name: Download All Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: release-files
 
@@ -195,7 +195,7 @@ jobs:
             "files/etc/init.d/ipthrottle"
             "files/usr/sbin/ipthrottle"
             "root/usr/share/luci/menu.d/luci-app-ipthrottle.json"
-            "root/etc/luci/uploads/ipthrottle.js"
+            "root/www/luci-static/resources/view/ipthrottle.js"
           )
           
           for file in "${required_files[@]}"; do
