@@ -8,6 +8,13 @@
 ## [Unreleased]
 
 ### Fixed
+- 北京时间 2026-06-10 06:15 - UI 兼容性修复和构建优化
+  - 修复 LuCI 界面在 OpenWrt 默认主题下显示问题
+    - 将 MultiValue 多选框改为独立 Flag 复选框（Bootstrap 主题兼容）
+    - 移除 datatype='time'（部分主题不支持）
+  - SDK 下载缓存优化：分离 sdk_version 和 openwrt_version
+    - 25.12.0 产物仍使用 SNAPSHOT SDK 下载（可命中缓存）
+    - 产物命名保持 25.12.0 方便用户识别
 - 北京时间 2026-06-10 05:58 - 构建产物优化
   - 产物命名简化：`ipthrottle-23.05.0.ipk` / `ipthrottle-24.10.0.ipk` / `ipthrottle-25.12.0.apk`
   - 将 SNAPSHOT 改为 25.12.0，统一版本命名方便用户认知

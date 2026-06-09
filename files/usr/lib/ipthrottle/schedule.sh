@@ -65,8 +65,9 @@ is_time_in_range() {
 # 判断今天是星期几是否在 schedule_days 列表中
 # 参数: $1=rule section 名
 # 返回: 0=匹配, 1=不匹配
-# 实现原因: schedule_days 是 UCI list 类型，存储 0-6 的数字（0=周日，1-6=周一到周六）
-# 注意: date +%u 返回 1=周一...7=周日，需要转换为 0=周日，1-6=周一到周六
+# 实现原因: LuCI 使用独立的 Flag 字段存储每天（schedule_day_mon/tue/wed/thu/fri/sat/sun）
+# 后端将这些 Flag 合并判断今天是否生效
+# 注意: date +%u 返回 1=周一...7=周日
 is_today_in_schedule_days() {
     local rule="$1"
     
@@ -74,25 +75,52 @@ is_today_in_schedule_days() {
     local today
     today=$(date +%u)
     
-    # 转换为 schedule_days 格式 (0=周日, 1=周一...6=周六)
-    # date +%u: 1-6 对应 1-6, 7 对应 0
-    if [ "$today" -eq 7 ]; then
-        today=0
-    fi
+    # 映射到 UCI 字段名
+    # date +%u: 1=周一 → schedule_day_mon
+    #           2=周二 → schedule_day_tue
+    #           3=周三 → schedule_day_wed
+    #           4=周四 → schedule_day_thu
+    #           5=周五 → schedule_day_fri
+    #           6=周六 → schedule_day_sat
+    #           7=周日 → schedule_day_sun
+    local day_field=""
+    case "$today" in
+        1) day_field="schedule_day_mon" ;;
+        2) day_field="schedule_day_tue" ;;
+        3) day_field="schedule_day_wed" ;;
+        4) day_field="schedule_day_thu" ;;
+        5) day_field="schedule_day_fri" ;;
+        6) day_field="schedule_day_sat" ;;
+        7) day_field="schedule_day_sun" ;;
+    esac
     
-    # 从 UCI 读取 schedule_days 列表（多行输出）
-    # uci show 会输出: ipthrottle.rule0.schedule_days='1' '2' '3'
-    local days_list
-    days_list=$(uci -q show ipthrottle."$rule".schedule_days 2>/dev/null | sed "s/^.*='//;s/'$//;s/' '//g")
+    # 从 UCI 读取对应的 Flag 值
+    local day_enabled
+    day_enabled=$(uci -q get ipthrottle."$rule"."$day_field")
     
-    # 如果 schedule_days 为空，表示不限制星期（每天都生效）
-    if [ -z "$days_list" ]; then
+    # 如果所有星期 Flag 都未设置或为空，表示不限制星期（每天都生效）
+    # 检查是否有任何一天被启用
+    local any_day_enabled=0
+    for f in schedule_day_mon schedule_day_tue schedule_day_wed schedule_day_thu schedule_day_fri schedule_day_sat schedule_day_sun; do
+        local val
+        val=$(uci -q get ipthrottle."$rule"."$f")
+        if [ "$val" = "1" ]; then
+            any_day_enabled=1
+            break
+        fi
+    done
+    
+    # 如果没有任何一天被启用，默认每天生效
+    if [ "$any_day_enabled" -eq 0 ]; then
         return 0
     fi
     
-    # 检查今天是否在列表中
-    # 使用逗号分隔避免部分匹配 (如 1 匹配 10)
-    echo ",$days_list," | grep -q ",$today,"
+    # 检查今天对应的 Flag 是否为 1
+    if [ "$day_enabled" = "1" ]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # 检查规则是否应该生效（根据 schedule_type 判断）

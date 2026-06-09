@@ -22,18 +22,22 @@ jobs:
           # OpenWrt 23.05.0：输出 .ipk 格式（opkg 包管理器）
           - arch: 'x86_64'
             openwrt_version: '23.05.0'
+            sdk_version: '23.05.0'
             pkg_format: 'ipk'
             sdk_compress: 'tar.xz'
           
           # OpenWrt 24.10.0：输出 .ipk 格式（opkg 包管理器）
           - arch: 'x86_64'
             openwrt_version: '24.10.0'
+            sdk_version: '24.10.0'
             pkg_format: 'ipk'
             sdk_compress: 'tar.zst'
           
-          # OpenWrt 25.12.0：输出 .apk 格式（apk 包管理器）
+          # OpenWrt 25.12.0 (实际下载 SNAPSHOT SDK)：输出 .apk 格式（apk 包管理器）
+          # sdk_version 控制实际下载的 SDK 版本，openwrt_version 用于产物命名
           - arch: 'x86_64'
             openwrt_version: '25.12.0'
+            sdk_version: 'SNAPSHOT'
             pkg_format: 'apk'
             sdk_compress: 'tar.zst'
     
@@ -64,7 +68,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: openwrt-sdk
-          key: openwrt-sdk-${{ matrix.openwrt_version }}-${{ matrix.arch }}-v4
+          # 缓存 key 使用 sdk_version（SNAPSHOT 会命中已有缓存）
+          key: openwrt-sdk-${{ matrix.sdk_version }}-${{ matrix.arch }}-v4
 
       - name: Download OpenWrt SDK
         if: steps.cache-sdk.outputs.cache-hit != 'true'
@@ -74,21 +79,19 @@ jobs:
           # 下载 OpenWrt SDK
           # - releases 版本路径: releases/VER/targets/x86/64/
           # - snapshots 路径:    snapshots/targets/x86/64/
-          # - 文件名格式不同：
-          #   23.05: openwrt-sdk-VERSION-x86-64_gcc-VER_musl.Linux-x86_64.tar.xz
-          #   24.10: openwrt-sdk-VERSION-x86-64_gcc-VER_musl.Linux-x86_64.tar.zst
-          #   snapshot: openwrt-sdk-x86-64_gcc-VER_musl.Linux-x86_64.tar.zst
+          # - sdk_version 控制实际下载哪个 SDK
           # ============================================================
           
           COMPRESS="${{ matrix.sdk_compress }}"
+          SDK_VER="${{ matrix.sdk_version }}"
           
-          # 根据版本确定基础 URL
-          if [ "${{ matrix.openwrt_version }}" = "SNAPSHOT" ]; then
+          # 根据 sdk_version 确定基础 URL
+          if [ "$SDK_VER" = "SNAPSHOT" ]; then
             SDK_PAGE="https://downloads.openwrt.org/snapshots/targets/x86/64/"
             SDK_PREFIX="openwrt-sdk-x86-64"
           else
-            SDK_PAGE="https://downloads.openwrt.org/releases/${{ matrix.openwrt_version }}/targets/x86/64/"
-            SDK_PREFIX="openwrt-sdk-${{ matrix.openwrt_version }}-x86-64"
+            SDK_PAGE="https://downloads.openwrt.org/releases/${SDK_VER}/targets/x86/64/"
+            SDK_PREFIX="openwrt-sdk-${SDK_VER}-x86-64"
           fi
           
           echo "SDK page: $SDK_PAGE"
@@ -239,54 +242,51 @@ jobs:
           ARCH="${{ matrix.arch }}"
           VERSION="${{ matrix.openwrt_version }}"
           
-          # 创建产物目录
-          mkdir -p artifacts
-          
-          # 查找并复制包文件，重命名为简洁格式
-          # 例如: ipthrottle-1.0.0-2_all.ipk → ipthrottle-23.05.0.ipk
+          # 查找包文件
           PKG_FILE=$(find openwrt-sdk/bin/packages/ -name "ipthrottle*.$PKG_FORMAT" -type f | head -1)
-          if [ -n "$PKG_FILE" ]; then
-            # 根据包格式生成目标文件名
-            if [ "$PKG_FORMAT" = "ipk" ]; then
-              TARGET_NAME="ipthrottle-${VERSION}.ipk"
-            else
-              TARGET_NAME="ipthrottle-${VERSION}.apk"
-            fi
-            cp "$PKG_FILE" "artifacts/$TARGET_NAME"
-            echo "✅ 收集包文件: $TARGET_NAME"
-          else
+          if [ -z "$PKG_FILE" ]; then
             echo "❌ 未找到包文件"
             exit 1
           fi
           
-          # 收集签名文件
+          # 重命名为带架构名的简洁格式
+          # 例如: ipthrottle-x86_64-23.05.0.ipk
+          if [ "$PKG_FORMAT" = "ipk" ]; then
+            TARGET_NAME="ipthrottle-${ARCH}-${VERSION}.ipk"
+          else
+            TARGET_NAME="ipthrottle-${ARCH}-${VERSION}.apk"
+          fi
+          
+          cp "$PKG_FILE" "$TARGET_NAME"
+          echo "✅ 产物文件: $TARGET_NAME"
+          ls -lh "$TARGET_NAME"
+          
+          # 收集签名文件（可选）
           for sig_file in Packages.sig Packages.json.sig index.json.sig; do
-            find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} artifacts/ \; 2>/dev/null || true
+            find openwrt-sdk/bin/packages/ -name "$sig_file" -exec cp {} . \; 2>/dev/null || true
           done
           
           # 根据包格式收集对应的公钥
           if [ "$PKG_FORMAT" = "ipk" ]; then
-            # ipk 使用 usign (ed25519)
             if [ -f openwrt-sdk/key-build.ucert ]; then
-              cp openwrt-sdk/key-build.ucert artifacts/key-build.ucert
-              echo "✅ 收集 usign 公钥: key-build.ucert"
+              cp openwrt-sdk/key-build.ucert key-build.ucert
+              echo "✅ 收集 usign 公钥"
             fi
           elif [ "$PKG_FORMAT" = "apk" ]; then
-            # apk 使用 RSA
             if [ -f openwrt-sdk/public-key.pem ]; then
-              cp openwrt-sdk/public-key.pem artifacts/public-key.pem
-              echo "✅ 收集 RSA 公钥: public-key.pem"
+              cp openwrt-sdk/public-key.pem public-key.pem
+              echo "✅ 收集 RSA 公钥"
             fi
           fi
-          
-          ls -lh artifacts/
 
-      - name: Upload Artifacts
+      - name: Upload Package
         uses: actions/upload-artifact@v4
         with:
-          name: ipthrottle-${{ matrix.openwrt_version }}
-          path: artifacts/
+          name: ${{ env.TARGET_NAME }}
+          path: ${{ env.TARGET_NAME }}
           retention-days: 30
+        env:
+          TARGET_NAME: ipthrottle-${{ matrix.arch }}-${{ matrix.openwrt_version }}.${{ matrix.pkg_format }}
 
   release:
     name: Create Release

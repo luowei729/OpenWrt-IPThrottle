@@ -93,7 +93,7 @@ return view.extend({
 		o.description = _('数字越小优先级越高 (1-99)');
 
 		// ==========================================
-		// 生效时间设置（替代原来的 JSON 输入）
+		// 生效时间设置
 		// ==========================================
 
 		// 时间类型选择：全天生效 / 自定义时间
@@ -104,26 +104,48 @@ return view.extend({
 		o.rmempty = false;
 		o.description = _('选择"全天生效"则规则始终生效；选择"自定义时间"可指定每周哪几天、几点到几点生效');
 
-		// 生效星期（仅当 schedule_type=weekly 时显示）
-		// 使用 MultiValue 支持多选
-		o = s.option(form.MultiValue, 'schedule_days', _('生效星期'));
-		o.value('1', _('周一'));
-		o.value('2', _('周二'));
-		o.value('3', _('周三'));
-		o.value('4', _('周四'));
-		o.value('5', _('周五'));
-		o.value('6', _('周六'));
-		o.value('0', _('周日'));
+		// 生效星期 - 使用多个独立 Flag 复选框，兼容性最好
+		// 后端会将这些合并为 schedule_days list
+		o = s.option(form.Flag, 'schedule_day_mon', _('周一'));
 		o.depends('schedule_type', 'weekly');
 		o.rmempty = true;
-		o.description = _('不选择任何星期则默认每天生效');
+		o.default = '0';
+
+		o = s.option(form.Flag, 'schedule_day_tue', _('周二'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.default = '0';
+
+		o = s.option(form.Flag, 'schedule_day_wed', _('周三'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.default = '0';
+
+		o = s.option(form.Flag, 'schedule_day_thu', _('周四'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.default = '0';
+
+		o = s.option(form.Flag, 'schedule_day_fri', _('周五'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.default = '0';
+
+		o = s.option(form.Flag, 'schedule_day_sat', _('周六'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.default = '0';
+
+		o = s.option(form.Flag, 'schedule_day_sun', _('周日'));
+		o.depends('schedule_type', 'weekly');
+		o.rmempty = true;
+		o.default = '0';
 
 		// 开始时间（仅当 schedule_type=weekly 时显示）
 		o = s.option(form.Value, 'schedule_start', _('开始时间'));
 		o.depends('schedule_type', 'weekly');
 		o.rmempty = true;
 		o.placeholder = '08:00';
-		o.datatype = 'time';
 		o.description = _('格式 HH:MM，不填默认 00:00');
 
 		// 结束时间（仅当 schedule_type=weekly 时显示）
@@ -131,7 +153,6 @@ return view.extend({
 		o.depends('schedule_type', 'weekly');
 		o.rmempty = true;
 		o.placeholder = '22:00';
-		o.datatype = 'time';
 		o.description = _('格式 HH:MM，不填默认 23:59');
 
 		return m.render();
