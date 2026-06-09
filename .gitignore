@@ -1,0 +1,5 @@
+# 签名密钥（私钥绝对不能提交）
+.github/signing/key-build
+
+# 构建产物
+*.ipk
