@@ -1,0 +1,35 @@
+# IPThrottle Configuration File
+# This file is parsed by UCI and iptest daemon
+
+config global
+    option enabled '0'
+    option default_upload '1024'
+    option default_download '4096'
+
+# Example rule: Limit single IP
+config rule
+    option name 'Example-Laptop'
+    option enabled '0'
+    option priority '10'
+    option wan_mask 'all'
+    option protocol 'all'
+    option mode 'independent'
+    option upload_mbps '10'
+    option download_mbps '50'
+    list ip_addr '192.168.1.100'
+    option ip_range ''
+    option time_plan '[]'
+
+# Example rule: Limit IP range
+config rule
+    option name 'Example-Network-Range'
+    option enabled '0'
+    option priority '20'
+    option wan_mask 'all'
+    option protocol 'all'
+    option mode 'shared'
+    option upload_mbps '100'
+    option download_mbps '500'
+    list ip_addr '192.168.1.10'
+    option ip_range '192.168.1.100-192.168.1.200'
+    option time_plan '[{"d":[1,2,3,4,5],"s":"09:00","e":"18:00"}]'

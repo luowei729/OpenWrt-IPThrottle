@@ -1,0 +1,26 @@
+#!/bin/sh
+# ==========================================
+# OpenWrt IPThrottle 插件 - 网络接口热插拔脚本
+# 文件: /etc/hotplug.d/iface/90-iptest
+# 功能: 监听网络接口状态变化，自动重新应用限速规则
+# 创建时间: 2026-06-09
+# ==========================================
+
+# 只在接口状态变化时触发
+[ "$INTERFACE" = "wan" -o "$INTERFACE" = "wan6" ] || exit 0
+
+# 检查接口动作
+case "$ACTION" in
+    ifup)
+        # 接口启动，等待网络稳定后重新应用规则
+        logger -t iptest-hotplug "Interface $INTERFACE is up, reloading iptest rules..."
+        sleep 2
+        /usr/sbin/iptest reload
+        ;;
+    ifdown)
+        # 接口断开，清理相关规则
+        logger -t iptest-hotplug "Interface $INTERFACE is down, reloading iptest rules..."
+        sleep 1
+        /usr/sbin/iptest reload
+        ;;
+esac

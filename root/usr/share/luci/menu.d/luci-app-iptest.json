@@ -1,0 +1,10 @@
+{
+	"admin/network/iptest": {
+		"title": "IP限速",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "iptest"
+		}
+	}
+}

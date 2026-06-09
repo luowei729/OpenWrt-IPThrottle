@@ -1,0 +1,57 @@
+#!/bin/sh
+# IPThrottle UCI默认配置初始化
+# 首次安装时执行
+
+# 创建默认配置（如果不存在）
+if [ ! -f /etc/config/iptest ]; then
+    cat > /etc/config/iptest << 'EOF'
+config iptest
+    option enabled '0'
+
+config rule 'example1'
+    option enabled '1'
+    option name '示例规则-单IP限速'
+    option wan_mask 'all'
+    list ip_entry '192.168.1.100'
+    option proto 'any'
+    option mode 'independent'
+    option upload_kbps '512'
+    option download_kbps '2048'
+    option priority '10'
+    option schedule_type 'always'
+
+config rule 'example2'
+    option enabled '0'
+    option name '示例规则-IP段限速'
+    option wan_mask 'all'
+    list ip_entry '192.168.1.10-192.168.1.20'
+    option proto 'tcp'
+    option mode 'shared'
+    option upload_kbps '1024'
+    option download_kbps '4096'
+    option priority '20'
+    option schedule_type 'weekly'
+    option schedule_json '[{"d":[1,2,3,4,5],"s":"09:00","e":"18:00"}]'
+    option comment '工作日白天限速'
+
+config rule 'example3'
+    option enabled '0'
+    option name '示例规则-多IP独立限速'
+    option wan_mask 'wan1'
+    list ip_entry '192.168.1.100'
+    list ip_entry '192.168.1.101-192.168.1.105'
+    option proto 'any'
+    option mode 'independent'
+    option upload_kbps '256'
+    option download_kbps '1024'
+    option priority '30'
+    option schedule_type 'always'
+EOF
+    echo "已创建默认配置文件 /etc/config/iptest"
+fi
+
+# 启用服务（可选，取消注释以启用）
+# /etc/init.d/iptest enable
+# /etc/init.d/iptest start
+
+exit 0
