@@ -52,7 +52,9 @@ get_wan_interfaces() {
     fi
     
     # 输出所有网络接口（每行一个）
-    echo "$networks"
+    # UCI 列表可能返回空格分隔的字符串，需要转换为每行一个
+    # 使用 tr 将空格转换为换行符
+    echo "$networks" | tr ' ' '\n'
 }
 
 # 验证 WAN 接口是否存在

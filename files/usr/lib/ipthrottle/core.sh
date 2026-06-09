@@ -98,7 +98,7 @@ prepare_rules() {
     
     # 第一遍：遍历所有 enabled 且 schedule 匹配的规则，记录 priority
     local config
-    for config in $(uci -q show ipthrottle | grep '=rule$' | sed 's/^iptables\.//;s/=rule$//'); do
+    for config in $(uci -q show ipthrottle | grep '=rule$' | sed 's/^ipthrottle\.//;s/=rule$//'); do
         # 跳过 disabled 规则
         local enabled
         enabled=$(uci -q get ipthrottle."$config".enabled)
@@ -186,8 +186,19 @@ setup_ifb_for_wan() {
     
     core_log_msg "INFO" "Setting up IFB $ifb_dev for WAN device $wan_dev"
     
+    # 创建 IFB 设备（如果不存在）
+    if ! ip link show "$ifb_dev" >/dev/null 2>&1; then
+        ip link add "$ifb_dev" type ifb 2>/dev/null || {
+            core_log_msg "ERROR" "Failed to create $ifb_dev"
+            return 1
+        }
+    fi
+    
     # 启动 ifb 设备
     ip link set "$ifb_dev" up 2>/dev/null
+    
+    # 清理 ifb 设备上旧的 qdisc
+    tc qdisc del dev "$ifb_dev" root 2>/dev/null
     
     # 在 WAN 设备添加 ingress qdisc
     tc qdisc del dev "$wan_dev" ingress 2>/dev/null
@@ -224,9 +235,17 @@ create_root_htb() {
     # 清理旧规则（幂等）
     tc qdisc del dev "$dev" root 2>/dev/null
     
-    # 添加根 htb qdisc，默认 class 0 (不限制)
-    tc qdisc add dev "$dev" root handle 1: htb default 100
-    tc class add dev "$dev" parent 1: classid 1:100 \
+    # 添加根 htb qdisc，默认 class 9999 (不限制)
+    # 使用紧凑的 class ID 方案避免溢出：
+    # - 1:1 = 根 class
+    # - 1:priority (1-99) = 优先级 class
+    # - 1:(100 + priority*10 + rule_idx) = 规则 class (110-1089)
+    # - 1:(1000 + priority*100 + rule_idx*10 + ip_id) = IP class (1000-65535)
+    tc qdisc add dev "$dev" root handle 1: htb default 9999
+    tc class add dev "$dev" parent 1: classid 1:1 \
+        htb rate "${total_bw}mbit" ceil "${total_bw}mbit"
+    # 默认 class（未匹配的流量）
+    tc class add dev "$dev" parent 1:1 classid 1:9999 \
         htb rate "${total_bw}mbit" ceil "${total_bw}mbit"
     
     core_log_msg "INFO" "Root HTB created on $dev (${total_bw}mbit)"
@@ -243,30 +262,28 @@ generate_nftables_config() {
     local nft_file="$WORK_DIR/ipthrottle.nft"
     core_log_msg "INFO" "Generating nftables config: $nft_file"
     
-    # 写入文件头：flush 现有 ipthrottle 表，创建新表
+    # 写入文件头：创建新表
+    # 注意: flush 在表不存在时会报错，所以先 add table 再 flush
     cat > "$nft_file" << 'HEADER'
 #!/usr/sbin/nft -f
 # OpenWrt-IPThrottle 自动生成的 nftables 规则
 # 注意: 本文件由 ipthrottle 服务自动生成，请勿手动修改
 
+add table ip ipthrottle
 flush table ip ipthrottle
 HEADER
     
-    # 如果 ipthrottle 表不存在，需要创建
-    # 使用 "add table" 而不是 "table"，如果不存在则创建，否则不报错
+    # 创建 forward chain
+    # 注意: ip family 只支持 forward/output/input 等 hook，不支持 ingress
+    # ingress 方向的流量通过 IFB 设备在 tc 层面处理，不需要 nftables ingress chain
     {
         echo ""
-        echo "add table ip ipthrottle"
-        echo ""
         echo "add chain ip ipthrottle forward { type filter hook forward priority -1 ; policy accept ; }"
-        echo "add chain ip ipthrottle ingress { type filter hook ingress priority 0 ; policy accept ; }"
     } >> "$nft_file"
     
-    # 临时文件，保存 forward 和 ingress 规则
+    # 临时文件，保存 forward 规则
     local fwd_rules="$WORK_DIR/nft_fwd"
-    local igs_rules="$WORK_DIR/nft_igs"
     > "$fwd_rules"
-    > "$igs_rules"
     
     # 临时文件：存放每条规则展开后的 IP 列表
     local ip_list_file="$WORK_DIR/rule_ips"
@@ -293,6 +310,7 @@ HEADER
         }
         
         # 为每个 IP 生成匹配规则
+        # 注意: 只使用 forward chain，ingress 方向通过 IFB + tc 处理
         local _ip
         while read -r _ip; do
             [ -z "$_ip" ] && continue
@@ -301,23 +319,17 @@ HEADER
                 tcp)
                     # forward: 匹配出站方向（源 IP 为 LAN IP）
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
-                    # ingress: 匹配入站方向（目的 IP 为 LAN IP）
-                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto tcp meta mark set $_mark" >> "$igs_rules"
                     ;;
                 udp)
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto udp meta mark set $_mark" >> "$igs_rules"
                     ;;
                 tcp+udp)
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto tcp meta mark set $_mark" >> "$igs_rules"
-                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta l4proto udp meta mark set $_mark" >> "$igs_rules"
                     ;;
                 *)
                     # any：不限制协议
                     echo "add rule ip ipthrottle forward ip saddr $_ip meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle ingress ip daddr $_ip meta mark set $_mark" >> "$igs_rules"
                     ;;
             esac
         done < "$ip_list_file"
@@ -325,7 +337,7 @@ HEADER
     done < "$SORTED_RULES_FILE"
     
     # 合并规则到配置文件
-    cat "$fwd_rules" "$igs_rules" >> "$nft_file"
+    cat "$fwd_rules" >> "$nft_file"
     
     core_log_msg "INFO" "NFT config generated"
 }
@@ -413,26 +425,28 @@ apply_tc_to_device() {
         _rate_str=$(kbps_to_tc_rate "$_rate_kbps")
         
         # 创建 priority class（每个 priority 仅一次）
+        # priority class ID: 1:priority (1-99)
         if ! grep -qx "$_priority" "$priority_seen"; then
-            local prio_minor_p100=$(( _priority * 100 ))
-            tc class add dev "$dev" parent 1:100 classid "1:${prio_minor_p100}" \
+            tc class add dev "$dev" parent 1:1 classid "1:$_priority" \
                 htb rate "${total_bw}mbit" ceil "${total_bw}mbit" 2>/dev/null
             echo "$_priority" >> "$priority_seen"
         fi
         
         # 分配 rule index 和 rule class ID
+        # rule class ID: 1:(100 + priority*10 + rule_idx) 范围 110-1089
         local _rule_idx
         _rule_idx=$(next_ip_id)
-        local rule_minor=$(( _priority * 1000 + _rule_idx ))
+        local rule_minor=$(( 100 + _priority * 10 + _rule_idx ))
         
         # 创建 rule class（独立 vs 共享模式不同）
+        # 父 class 是 priority class (1:priority)
         if [ "$_mode" = "independent" ]; then
-            # 独立限速：rule class rate=0（用 WAN 总带宽作为父速率限制）
-            tc class add dev "$dev" parent "1:$((_priority * 100))" classid "1:${rule_minor}" \
+            # 独立限速：rule class rate=WAN总带宽（不在此层限制）
+            tc class add dev "$dev" parent "1:$_priority" classid "1:${rule_minor}" \
                 htb rate "${total_bw}mbit" ceil "${total_bw}mbit"
         else
             # 共享限速：rule class rate=限速值（所有 IP class 共享此带宽）
-            tc class add dev "$dev" parent "1:$((_priority * 100))" classid "1:${rule_minor}" \
+            tc class add dev "$dev" parent "1:$_priority" classid "1:${rule_minor}" \
                 htb rate "$_rate_str" ceil "$_rate_str"
         fi
         
@@ -446,8 +460,9 @@ apply_tc_to_device() {
             
             local _ip_id
             _ip_id=$(next_ip_id)
-            # IP class minor: priority*1000 + rule_idx*100 + ip_id（避免冲突）
-            local ip_minor=$(( _priority * 1000 + _rule_idx * 100 + _ip_id ))
+            # IP class ID: 1:(1000 + priority*100 + rule_idx*10 + ip_id)
+            # 范围 1000-65535，确保不溢出
+            local ip_minor=$(( 1000 + _priority * 100 + _rule_idx * 10 + _ip_id ))
             
             local ip_rate
             if [ "$_mode" = "independent" ]; then
@@ -455,7 +470,7 @@ apply_tc_to_device() {
                 ip_rate="$_rate_str"
             else
                 # 共享：IP class rate 不设限制，由父 class 统一限制
-                # tc 不支持 rate=0，但可以用极小速率（1bit）作为最小保证
+                # tc 不支持 rate=0，但可以用极小速率（1kbit）作为最小保证
                 ip_rate="1kbit"
             fi
             
@@ -494,7 +509,8 @@ apply_tc_to_device() {
             
             local _ip_id
             _ip_id=$(next_ip_id)
-            local ip_minor=$(( _priority * 1000 + _rule_idx * 100 + _ip_id ))
+            # IP class ID: 与前面创建 class 时保持一致
+            local ip_minor=$(( 1000 + _priority * 100 + _rule_idx * 10 + _ip_id ))
             
             # 使用 fw filter，按 mark 匹配，路由到相应 class
             tc filter add dev "$dev" parent 1:0 protocol ip \
