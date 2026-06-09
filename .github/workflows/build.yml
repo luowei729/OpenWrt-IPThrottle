@@ -31,19 +31,7 @@ jobs:
             pkg_format: 'ipk'
             sdk_compress: 'tar.zst'
           
-          # OpenWrt SNAPSHOT：输出 .apk 格式（apk 包管理器）
-          - arch: 'x86_64'
-            openwrt_version: 'SNAPSHOT'
-            pkg_format: 'apk'
-            sdk_compress: 'tar.zst'
-          
-          # OpenWrt SNAPSHOT：输出 .apk 格式（apk 包管理器）
-          - arch: 'x86_64'
-            openwrt_version: 'SNAPSHOT'
-            pkg_format: 'apk'
-            sdk_compress: 'tar.zst'
-          
-          # OpenWrt SNAPSHOT：输出 .apk 格式（apk 包管理器）
+          # OpenWrt SNAPSHOT (即 25.x 开发版)：输出 .apk 格式（apk 包管理器）
           - arch: 'x86_64'
             openwrt_version: 'SNAPSHOT'
             pkg_format: 'apk'
@@ -185,13 +173,16 @@ jobs:
       - name: Restore Signing Key
         env:
           OPENWRT_SIGN_KEY: ${{ secrets.OPENWRT_SIGN_KEY }}
+          OPENWRT_RSA_PRIVATE_KEY: ${{ secrets.OPENWRT_RSA_PRIVATE_KEY }}
+          OPENWRT_RSA_PUBLIC_KEY: ${{ secrets.OPENWRT_RSA_PUBLIC_KEY }}
           PKG_FORMAT: "${{ matrix.pkg_format }}"
         run: |
           set -e
           # ============================================================
-          # 根据包格式恢复签名密钥：
-          # - ipk 格式: 使用 usign (ed25519)
-          # - apk 格式: 使用 RSA (OpenSSL)
+          # 恢复签名密钥
+          # - ipk: 使用 usign 密钥（ed25519），存储在 key-build/key-build.ucert
+          # - apk: 使用 RSA 密钥，存储在 private-key.pem/public-key.pem
+          # 持久化密钥：每次构建使用相同的密钥，避免设备每次都需要重新导入
           # ============================================================
           
           if [ -z "$OPENWRT_SIGN_KEY" ]; then
@@ -201,20 +192,27 @@ jobs:
           
           echo "📦 包格式: $PKG_FORMAT"
           
+          # 所有格式都需要 usign 密钥（用于构建索引签名）
+          printf "%s" "$OPENWRT_SIGN_KEY" > openwrt-sdk/key-build
+          [ -n "$(tail -c1 openwrt-sdk/key-build)" ] && echo "" >> openwrt-sdk/key-build
+          chmod 600 openwrt-sdk/key-build
+          echo "✅ 签名私钥已恢复到 openwrt-sdk/key-build (usign)"
+          
+          # apk 格式需要 RSA 密钥
           if [ "$PKG_FORMAT" = "apk" ]; then
-            # apk 格式不需要 usign，SDK 会自动生成 RSA 密钥
-            echo "✅ apk 格式由 SDK 自动生成 RSA 密钥"
-          elif [ "$PKG_FORMAT" = "ipk" ]; then
-            # ipk 格式需要 usign 密钥
-            printf "%s" "$OPENWRT_SIGN_KEY" > openwrt-sdk/key-build
-            [ -n "$(tail -c1 openwrt-sdk/key-build)" ] && echo "" >> openwrt-sdk/key-build
-            chmod 600 openwrt-sdk/key-build
-            echo "✅ 签名私钥已恢复到 openwrt-sdk/key-build"
+            if [ -z "$OPENWRT_RSA_PRIVATE_KEY" ]; then
+              echo "ERROR: OPENWRT_RSA_PRIVATE_KEY secret 为空！请在 GitHub Secrets 中配置 RSA 私钥"
+              exit 1
+            fi
+            printf "%s\n" "$OPENWRT_RSA_PRIVATE_KEY" > openwrt-sdk/private-key.pem
+            chmod 600 openwrt-sdk/private-key.pem
+            echo "✅ RSA 私钥已恢复到 openwrt-sdk/private-key.pem (apk 签名)"
             
-            # 验证密钥格式
-            echo "=== 私钥内容（前 50 字符）==="
-            head -c 200 openwrt-sdk/key-build
-            echo ""
+            if [ -n "$OPENWRT_RSA_PUBLIC_KEY" ]; then
+              printf "%s\n" "$OPENWRT_RSA_PUBLIC_KEY" > openwrt-sdk/public-key.pem
+              chmod 644 openwrt-sdk/public-key.pem
+              echo "✅ RSA 公钥已恢复到 openwrt-sdk/public-key.pem (apk 验证)"
+            fi
           fi
 
       - name: Copy source code
