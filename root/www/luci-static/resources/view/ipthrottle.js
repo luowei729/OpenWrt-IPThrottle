@@ -17,8 +17,7 @@ return view.extend({
 			_('配置内网IP的限速规则'));
 
 		// ==========================================
-		// 规则列表（GridSection）
-		// 只显示关键字段，避免列太多导致显示不全
+		// 规则列表（GridSection）- 精简版
 		// ==========================================
 		s = m.section(form.GridSection, 'rule', _('规则列表'));
 		s.addremove = true;
@@ -36,35 +35,34 @@ return view.extend({
 		o.placeholder = '例：客厅电视';
 
 		// 内网IP地址
-		o = s.option(form.DynamicList, 'ip_entry', _('内网IP地址'));
+		o = s.option(form.DynamicList, 'ip_entry', _('内网IP'));
 		o.rmempty = false;
 		o.placeholder = '192.168.1.100';
 		o.datatype = 'ip4addr("true")';
 
-		// 上传限速
-		o = s.option(form.Value, 'upload_kbps', _('上传(Kbps)'));
+		// 上传限速 - 标题带单位
+		o = s.option(form.Value, 'upload_kbps', _('上传<br/><small style="color:#999">Kbps</small>'));
 		o.rmempty = false;
 		o.datatype = 'uinteger';
 		o.placeholder = '1024';
 		o.default = '1024';
 
-		// 下载限速
-		o = s.option(form.Value, 'download_kbps', _('下载(Kbps)'));
+		// 下载限速 - 标题带单位
+		o = s.option(form.Value, 'download_kbps', _('下载<br/><small style="color:#999">Kbps</small>'));
 		o.rmempty = false;
 		o.datatype = 'uinteger';
 		o.placeholder = '4096';
 		o.default = '4096';
 
-		// 生效时间（列表页只显示类型）
+		// 生效时间
 		o = s.option(form.ListValue, 'schedule_type', _('生效时间'));
-		o.value('always', _('全天生效'));
-		o.value('weekly', _('自定义时间'));
+		o.value('always', _('全天'));
+		o.value('weekly', _('自定义'));
 		o.default = 'always';
 		o.rmempty = false;
 
 		// ==========================================
-		// 以下为编辑表单中的详细字段（不在列表中显示）
-		// 使用 modal 编辑时显示
+		// 编辑弹窗中的详细字段（modalonly）
 		// ==========================================
 
 		// WAN线路选择
@@ -76,7 +74,7 @@ return view.extend({
 		o.value('eth3.2', _('WAN4'));
 		o.default = 'all';
 		o.rmempty = false;
-		o.modalonly = true; // 仅在编辑弹窗中显示
+		o.modalonly = true;
 
 		// IP范围（可选）
 		o = s.option(form.Value, 'ip_range', _('IP范围(可选)'));
@@ -109,9 +107,10 @@ return view.extend({
 		o.placeholder = '10';
 		o.default = '10';
 		o.modalonly = true;
+		o.description = _('数字越小优先级越高 (1-99)');
 
 		// ==========================================
-		// 自定义时间设置（modalonly，仅编辑时显示）
+		// 自定义时间设置（modalonly）
 		// ==========================================
 
 		// 生效星期 - 使用独立 Flag 复选框
@@ -163,6 +162,7 @@ return view.extend({
 		o.rmempty = true;
 		o.placeholder = '08:00';
 		o.modalonly = true;
+		o.description = _('格式 HH:MM，不填默认 00:00');
 
 		// 结束时间
 		o = s.option(form.Value, 'schedule_end', _('结束时间'));
@@ -170,6 +170,7 @@ return view.extend({
 		o.rmempty = true;
 		o.placeholder = '22:00';
 		o.modalonly = true;
+		o.description = _('格式 HH:MM，不填默认 23:59');
 
 		return m.render();
 	}

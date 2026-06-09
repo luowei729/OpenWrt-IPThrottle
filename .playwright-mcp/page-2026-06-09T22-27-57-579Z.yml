@@ -1,0 +1,98 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "ImmortalWrt" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - list [ref=e4]:
+      - listitem [ref=e5]:
+        - link "Status &darr;" [ref=e6] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e7]:
+          - listitem [ref=e8]:
+            - link "Overview" [ref=e9] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/overview
+          - listitem [ref=e10]:
+            - link "Routing" [ref=e11] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/routes
+          - listitem [ref=e12]:
+            - link "Firewall" [ref=e13] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/nftables
+          - listitem [ref=e14]:
+            - link "System Log" [ref=e15] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/logs
+          - listitem [ref=e16]:
+            - link "Processes" [ref=e17] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/processes
+          - listitem [ref=e18]:
+            - link "Realtime Graphs" [ref=e19] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/realtime
+      - listitem [ref=e20]:
+        - link "System &darr;" [ref=e21] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e22]:
+          - listitem [ref=e23]:
+            - link "System" [ref=e24] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/system
+          - listitem [ref=e25]:
+            - link "Administration" [ref=e26] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/admin
+          - listitem [ref=e27]:
+            - link "Software" [ref=e28] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/package-manager
+          - listitem [ref=e29]:
+            - link "Startup" [ref=e30] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/startup
+          - listitem [ref=e31]:
+            - link "Scheduled Tasks" [ref=e32] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/crontab
+          - listitem [ref=e33]:
+            - link "Mount Points" [ref=e34] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/mounts
+          - listitem [ref=e35]:
+            - link "Attended Sysupgrade" [ref=e36] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/attendedsysupgrade
+          - listitem [ref=e37]:
+            - link "Backup / Flash Firmware" [ref=e38] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/flash
+          - listitem [ref=e39]:
+            - link "Reboot" [ref=e40] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/reboot
+      - listitem [ref=e41]:
+        - link "Network &darr;" [ref=e42] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e43]:
+          - listitem [ref=e44]:
+            - link "Interfaces" [ref=e45] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/network
+          - listitem [ref=e46]:
+            - link "Routing" [ref=e47] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/routes
+          - listitem [ref=e48]:
+            - link "DHCP and DNS" [ref=e49] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/dhcp
+          - listitem [ref=e50]:
+            - link "Diagnostics" [ref=e51] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/diagnostics
+          - listitem [ref=e52]:
+            - link "IPThrottle" [ref=e53] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/ipthrottle
+          - listitem [ref=e54]:
+            - link "Firewall" [ref=e55] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/firewall
+      - listitem [ref=e56]:
+        - link "Log out" [ref=e57] [cursor=pointer]:
+          - /url: /cgi-bin/luci/admin/logout
+  - generic [ref=e58]:
+    - generic [ref=e59]:
+      - heading "No password set!" [level=4] [ref=e60]
+      - paragraph [ref=e61]: There is no password set on this router. Please configure a root password to protect the web interface.
+      - link "Go to password configuration..." [ref=e63] [cursor=pointer]:
+        - /url: /cgi-bin/luci/admin/system/admin
+    - generic [ref=e65]: Loading view…
+  - contentinfo [ref=e66]:
+    - generic [ref=e67]:
+      - text: Powered by
+      - link "LuCI openwrt-24.10 branch (26.114.29114~adb3df4)" [ref=e68] [cursor=pointer]:
+        - /url: https://github.com/openwrt/luci
+      - text: /
+      - link "ImmortalWrt 24.10.6 (r33869-cf234f8de6d5)" [ref=e69] [cursor=pointer]:
+        - /url: https://immortalwrt.org/

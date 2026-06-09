@@ -4,24 +4,33 @@
 # 文件: /usr/lib/ipthrottle/ipthrottle-daemon
 # 功能: 常驻进程，监听 UCI 配置变化并自动重载
 # 创建时间: 2026-06-09
+# 修改时间: 2026-06-10 (修复 stat 命令兼容性)
 # ==========================================
 
 # 监控 UCI 配置文件变化
 UCI_CONFIG="/etc/config/ipthrottle"
 LAST_MOD_TIME=0
 
+# 日志函数
+log_msg() {
+    logger -t "ipthrottle-daemon" "$1"
+}
+
+log_msg "Daemon started, monitoring $UCI_CONFIG"
+
 # 主循环
 while true; do
     # 获取配置文件修改时间
     if [ -f "$UCI_CONFIG" ]; then
-        CURRENT_MOD_TIME=$(stat -c %Y "$UCI_CONFIG" 2>/dev/null || echo 0)
+        # 使用 stat 获取修改时间（兼容 busybox 和 GNU stat）
+        CURRENT_MOD_TIME=$(stat -c %Y "$UCI_CONFIG" 2>/dev/null || stat -f %m "$UCI_CONFIG" 2>/dev/null || echo 0)
         
         # 如果文件被修改，触发重载
-        if [ "$CURRENT_MOD_TIME" != "$LAST_MOD_TIME" ]; then
-            logger -t ipthrottle-daemon "Configuration changed, reloading rules..."
+        if [ "$CURRENT_MOD_TIME" != "$LAST_MOD_TIME" ] && [ "$LAST_MOD_TIME" != "0" ]; then
+            log_msg "Configuration changed, reloading rules..."
             /usr/sbin/ipthrottle reload
-            LAST_MOD_TIME=$CURRENT_MOD_TIME
         fi
+        LAST_MOD_TIME=$CURRENT_MOD_TIME
     fi
     
     # 每秒检查一次

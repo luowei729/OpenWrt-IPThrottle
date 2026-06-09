@@ -1,0 +1,191 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "ImmortalWrt" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - list [ref=e4]:
+      - listitem [ref=e5]:
+        - link "Status &darr;" [ref=e6] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e7]:
+          - listitem [ref=e8]:
+            - link "Overview" [ref=e9] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/overview
+          - listitem [ref=e10]:
+            - link "Routing" [ref=e11] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/routes
+          - listitem [ref=e12]:
+            - link "Firewall" [ref=e13] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/nftables
+          - listitem [ref=e14]:
+            - link "System Log" [ref=e15] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/logs
+          - listitem [ref=e16]:
+            - link "Processes" [ref=e17] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/processes
+          - listitem [ref=e18]:
+            - link "Realtime Graphs" [ref=e19] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/status/realtime
+      - listitem [ref=e20]:
+        - link "System &darr;" [ref=e21] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e22]:
+          - listitem [ref=e23]:
+            - link "System" [ref=e24] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/system
+          - listitem [ref=e25]:
+            - link "Administration" [ref=e26] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/admin
+          - listitem [ref=e27]:
+            - link "Software" [ref=e28] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/package-manager
+          - listitem [ref=e29]:
+            - link "Startup" [ref=e30] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/startup
+          - listitem [ref=e31]:
+            - link "Scheduled Tasks" [ref=e32] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/crontab
+          - listitem [ref=e33]:
+            - link "Mount Points" [ref=e34] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/mounts
+          - listitem [ref=e35]:
+            - link "Attended Sysupgrade" [ref=e36] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/attendedsysupgrade
+          - listitem [ref=e37]:
+            - link "Backup / Flash Firmware" [ref=e38] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/flash
+          - listitem [ref=e39]:
+            - link "Reboot" [ref=e40] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/system/reboot
+      - listitem [ref=e41]:
+        - link "Network &darr;" [ref=e42] [cursor=pointer]:
+          - /url: "#"
+        - list [ref=e43]:
+          - listitem [ref=e44]:
+            - link "Interfaces" [ref=e45] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/network
+          - listitem [ref=e46]:
+            - link "Routing" [ref=e47] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/routes
+          - listitem [ref=e48]:
+            - link "DHCP and DNS" [ref=e49] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/dhcp
+          - listitem [ref=e50]:
+            - link "Diagnostics" [ref=e51] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/diagnostics
+          - listitem [ref=e52]:
+            - link "IPThrottle" [ref=e53] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/ipthrottle
+          - listitem [ref=e54]:
+            - link "Firewall" [ref=e55] [cursor=pointer]:
+              - /url: /cgi-bin/luci/admin/network/firewall
+      - listitem [ref=e56]:
+        - link "Log out" [ref=e57] [cursor=pointer]:
+          - /url: /cgi-bin/luci/admin/logout
+  - generic [ref=e58]:
+    - generic [ref=e59]:
+      - heading "No password set!" [level=4] [ref=e60]
+      - paragraph [ref=e61]: There is no password set on this router. Please configure a root password to protect the web interface.
+      - link "Go to password configuration..." [ref=e63] [cursor=pointer]:
+        - /url: /cgi-bin/luci/admin/system/admin
+    - generic [ref=e64]:
+      - generic [ref=e65]:
+        - heading "IP限速设置" [level=2] [ref=e66]
+        - generic [ref=e67]: 配置内网IP的限速规则
+        - generic [ref=e68]:
+          - heading "规则列表" [level=3] [ref=e69]
+          - table [ref=e70]:
+            - rowgroup [ref=e71]:
+              - row "启用 规则名称 网络接口 内网IP地址 IP范围(可选) 协议 限速模式 上传限速(Kbps) 下载限速(Kbps) 优先级 生效时间 生效星期 开始时间 结束时间" [ref=e72]:
+                - columnheader "启用" [ref=e73] [cursor=pointer]
+                - columnheader "规则名称" [ref=e74] [cursor=pointer]
+                - columnheader "网络接口" [ref=e75] [cursor=pointer]
+                - columnheader "内网IP地址" [ref=e76] [cursor=pointer]
+                - columnheader "IP范围(可选)" [ref=e77] [cursor=pointer]
+                - columnheader "协议" [ref=e78] [cursor=pointer]
+                - columnheader "限速模式" [ref=e79] [cursor=pointer]
+                - columnheader "上传限速(Kbps)" [ref=e80] [cursor=pointer]
+                - columnheader "下载限速(Kbps)" [ref=e81] [cursor=pointer]
+                - columnheader "优先级" [ref=e82] [cursor=pointer]
+                - columnheader "生效时间" [ref=e83] [cursor=pointer]
+                - columnheader "生效星期" [ref=e84] [cursor=pointer]
+                - columnheader "开始时间" [ref=e85] [cursor=pointer]
+                - columnheader "结束时间" [ref=e86] [cursor=pointer]
+                - columnheader [ref=e87]
+              - 'row "单位: Kbps (1 Mbps = 1024 Kbps) 单位: Kbps (1 Mbps = 1024 Kbps) 数字越小优先级越高 (1-99) 选择\"全天生效\"则规则始终生效；选择\"自定义时间\"可指定每周哪几天、几点到几点生效 不选择任何星期则默认每天生效 格式 HH:MM，不填默认 00:00 格式 HH:MM，不填默认 23:59" [ref=e88]':
+                - columnheader [ref=e89]
+                - columnheader [ref=e90]
+                - columnheader [ref=e91]
+                - columnheader [ref=e92]
+                - columnheader [ref=e93]
+                - columnheader [ref=e94]
+                - columnheader [ref=e95]
+                - 'columnheader "单位: Kbps (1 Mbps = 1024 Kbps)" [ref=e96]'
+                - 'columnheader "单位: Kbps (1 Mbps = 1024 Kbps)" [ref=e97]'
+                - columnheader "数字越小优先级越高 (1-99)" [ref=e98]
+                - columnheader "选择\"全天生效\"则规则始终生效；选择\"自定义时间\"可指定每周哪几天、几点到几点生效" [ref=e99]
+                - columnheader "不选择任何星期则默认每天生效" [ref=e100]
+                - columnheader "格式 HH:MM，不填默认 00:00" [ref=e101]
+                - columnheader "格式 HH:MM，不填默认 23:59" [ref=e102]
+                - columnheader [ref=e103]
+            - rowgroup [ref=e104]:
+              - row "No 示例-笔记本电脑 all 192.168.1.100 none any independent 512 2048 10 always none none none ☰ Edit Delete" [ref=e105]:
+                - cell "No" [ref=e106]
+                - cell "示例-笔记本电脑" [ref=e107]
+                - cell "all" [ref=e108]
+                - cell "192.168.1.100" [ref=e109]
+                - cell "none" [ref=e110]:
+                  - emphasis [ref=e111]: none
+                - cell "any" [ref=e112]
+                - cell "independent" [ref=e113]
+                - cell "512" [ref=e114]
+                - cell "2048" [ref=e115]
+                - cell "10" [ref=e116]
+                - cell "always" [ref=e117]
+                - cell "none" [ref=e118]:
+                  - emphasis [ref=e119]: none
+                - cell "none" [ref=e120]:
+                  - emphasis [ref=e121]: none
+                - cell "none" [ref=e122]:
+                  - emphasis [ref=e123]: none
+                - cell "☰ Edit Delete" [ref=e124]:
+                  - generic [ref=e125]:
+                    - button "☰" [ref=e126]
+                    - button "Edit" [ref=e127] [cursor=pointer]
+                    - button "Delete" [ref=e128] [cursor=pointer]
+              - row "No 示例-工作日白天限速 all 192.168.1.10-192.168.1.200 none tcp shared 1024 4096 20 weekly 1 2 3 4 5 09:00 18:00 ☰ Edit Delete" [ref=e129]:
+                - cell "No" [ref=e130]
+                - cell "示例-工作日白天限速" [ref=e131]
+                - cell "all" [ref=e132]
+                - cell "192.168.1.10-192.168.1.200" [ref=e133]
+                - cell "none" [ref=e134]:
+                  - emphasis [ref=e135]: none
+                - cell "tcp" [ref=e136]
+                - cell "shared" [ref=e137]
+                - cell "1024" [ref=e138]
+                - cell "4096" [ref=e139]
+                - cell "20" [ref=e140]
+                - cell "weekly" [ref=e141]
+                - cell "1 2 3 4 5" [ref=e142]
+                - cell "09:00" [ref=e143]
+                - cell "18:00" [ref=e144]
+                - cell "☰ Edit Delete" [ref=e145]:
+                  - generic [ref=e146]:
+                    - button "☰" [ref=e147]
+                    - button "Edit" [ref=e148] [cursor=pointer]
+                    - button "Delete" [ref=e149] [cursor=pointer]
+          - button "Add" [ref=e151] [cursor=pointer]
+      - generic [ref=e152]:
+        - generic [ref=e153] [cursor=pointer]:
+          - list [ref=e154]:
+            - listitem [ref=e155]: Save & Apply
+          - generic [ref=e156]: ▾
+        - button "Save" [ref=e157] [cursor=pointer]
+        - button "Reset" [ref=e158] [cursor=pointer]
+  - contentinfo [ref=e159]:
+    - generic [ref=e160]:
+      - text: Powered by
+      - link "LuCI openwrt-24.10 branch (26.114.29114~adb3df4)" [ref=e161] [cursor=pointer]:
+        - /url: https://github.com/openwrt/luci
+      - text: /
+      - link "ImmortalWrt 24.10.6 (r33869-cf234f8de6d5)" [ref=e162] [cursor=pointer]:
+        - /url: https://immortalwrt.org/

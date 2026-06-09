@@ -36,6 +36,7 @@ endef
 define Package/ipthrottle/install
 	$(INSTALL_DIR) $(1)/usr/lib/ipthrottle
 	$(INSTALL_BIN) ./files/usr/lib/ipthrottle/*.sh $(1)/usr/lib/ipthrottle/
+	$(INSTALL_BIN) ./files/usr/lib/ipthrottle/ipthrottle-daemon $(1)/usr/lib/ipthrottle/
 	
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_DATA) ./files/etc/config/ipthrottle $(1)/etc/config/
