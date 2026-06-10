@@ -36,9 +36,11 @@ case "$1" in
         ;;
     status)
         # 检查 nftables 表是否存在
+        # 实现原因: 通过检查 nftables 表判断服务是否运行
         if nft list table ip ipthrottle >/dev/null 2>&1; then
             echo "ipthrottle: running"
-            # 显示 IP 限速规则数量（prerouting chain 中的 limit 规则）
+            # 统计 IP 限速规则数量
+            # 实现原因: 每条限速规则包含 "limit rate over"，用此特征计数
             RULE_COUNT=$(nft list table ip ipthrottle 2>/dev/null | grep -c "limit rate over")
             echo "  Active IP throttle rules: $RULE_COUNT"
         else

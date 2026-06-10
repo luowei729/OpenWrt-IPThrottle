@@ -5,11 +5,17 @@
 # 功能: 常驻进程，监听 UCI 配置变化并自动重载
 # 创建时间: 2026-06-09
 # 修改时间: 2026-06-10 (修复 stat 命令兼容性)
+# 修改时间: 2026-06-10 (启动时先创建规则)
+# 修改时间: 2026-06-10 (检测 nftables 表丢失并自动恢复)
 # ==========================================
 
 # 监控 UCI 配置文件变化
 UCI_CONFIG="/etc/config/ipthrottle"
 LAST_MOD_TIME=0
+# 检测 nftables 表丢失的计数器
+# 实现原因: 避免临时性检测失败导致重复重建规则
+NFT_CHECK_FAIL_COUNT=0
+NFT_CHECK_THRESHOLD=3
 
 # 日志函数
 log_msg() {
@@ -18,9 +24,19 @@ log_msg() {
 
 log_msg "Daemon started, monitoring $UCI_CONFIG"
 
+# 启动时先创建规则
+# 原因: 系统重启后 nftables 规则丢失，需要在守护进程启动时重新创建
+log_msg "Applying rules on startup..."
+/usr/sbin/ipthrottle start 2>&1 | logger -t "ipthrottle-daemon"
+
+# 获取配置文件修改时间（用于后续监控）
+if [ -f "$UCI_CONFIG" ]; then
+    LAST_MOD_TIME=$(stat -c %Y "$UCI_CONFIG" 2>/dev/null || stat -f %m "$UCI_CONFIG" 2>/dev/null || echo 0)
+fi
+
 # 主循环
 while true; do
-    # 获取配置文件修改时间
+    # 1. 检测配置文件变化
     if [ -f "$UCI_CONFIG" ]; then
         # 使用 stat 获取修改时间（兼容 busybox 和 GNU stat）
         CURRENT_MOD_TIME=$(stat -c %Y "$UCI_CONFIG" 2>/dev/null || stat -f %m "$UCI_CONFIG" 2>/dev/null || echo 0)
@@ -31,6 +47,20 @@ while true; do
             /usr/sbin/ipthrottle reload
         fi
         LAST_MOD_TIME=$CURRENT_MOD_TIME
+    fi
+    
+    # 2. 检测 nftables 表是否丢失
+    # 实现原因: passwall 或其他防火墙操作可能清除 nftables 表
+    # 当连续多次检测失败时，自动重新创建规则
+    if ! nft list table ip ipthrottle >/dev/null 2>&1; then
+        NFT_CHECK_FAIL_COUNT=$((NFT_CHECK_FAIL_COUNT + 1))
+        if [ $NFT_CHECK_FAIL_COUNT -ge $NFT_CHECK_THRESHOLD ]; then
+            log_msg "nftables table lost, recreating rules..."
+            /usr/sbin/ipthrottle start 2>&1 | logger -t "ipthrottle-daemon"
+            NFT_CHECK_FAIL_COUNT=0
+        fi
+    else
+        NFT_CHECK_FAIL_COUNT=0
     fi
     
     # 每秒检查一次

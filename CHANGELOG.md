@@ -7,6 +7,30 @@
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-06-10
+
+### Fixed
+- 北京时间 2026-06-10 17:50 - 修复重启后限速失效问题
+  - **根本原因**: ipthrottle-daemon 启动时只监控配置文件变化，不创建 nftables 规则
+  - **现象**: 系统重启后 ipthrottle 守护进程运行但 nftables 表不存在，限速不生效
+  - **修复方案**:
+    1. 守护进程启动时先调用 `/usr/sbin/ipthrottle start` 创建规则
+    2. 守护进程每秒检测 nftables 表是否存在，连续 3 次检测失败则自动重建规则
+    3. 实现原因: passwall 等防火墙插件可能清除 nftables，自动恢复确保限速持续生效
+
+### Added
+- 北京时间 2026-06-10 17:50 - LuCI 首页顶部增加运行状态显示
+  - 绿色横幅: "✅ IPThrottle 运行中 — 活跃规则: N"
+  - 红色横幅: "❌ IPThrottle 未运行 — 请检查服务状态"
+  - 实现原因: 用户进入页面时一眼就能看到服务是否在运行
+  - 修改文件: `root/www/luci-static/resources/view/ipthrottle.js`
+  - ACL 权限: 添加 `/usr/sbin/ipthrottle` 的 exec 权限
+
+### Changed
+- 北京时间 2026-06-10 17:50 - 修复 status 命令显示正确规则数
+  - 原: grep "chain rule_" (始终返回 0)
+  - 新: grep "limit rate over" (正确统计 IP 限速规则数)
+
 ## [1.0.4] - 2026-06-10
 
 ### Fixed

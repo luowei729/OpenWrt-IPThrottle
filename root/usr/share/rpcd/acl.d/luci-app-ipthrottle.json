@@ -5,11 +5,12 @@
 			"uci": [ "ipthrottle" ],
 			"ubus": {
 				"uci": [ "get" ],
-				"file": [ "read", "list" ]
+				"file": [ "read", "list", "exec" ]
 			},
 			"file": {
 				"/etc/ipthrottle/*": [ "read" ],
 				"/usr/lib/ipthrottle/*": [ "read", "exec" ],
+				"/usr/sbin/ipthrottle": [ "read", "exec" ],
 				"/www/luci-static/resources/view/ipthrottle*": [ "read" ]
 			}
 		},
@@ -17,10 +18,11 @@
 			"uci": [ "ipthrottle" ],
 			"ubus": {
 				"uci": [ "add", "set", "delete", "commit", "apply" ],
-				"file": [ "write", "remove" ]
+				"file": [ "write", "remove", "exec" ]
 			},
 			"file": {
-				"/etc/ipthrottle/*": [ "write" ]
+				"/etc/ipthrottle/*": [ "write" ],
+				"/usr/sbin/ipthrottle": [ "exec" ]
 			}
 		}
 	}

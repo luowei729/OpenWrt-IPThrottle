@@ -2,6 +2,8 @@
 'require view';
 'require form';
 'require uci';
+'require fs';
+'require ui';
 
 	return view.extend({
 		load: function() {
@@ -14,6 +16,12 @@
 			// ==========================================
 			var versionUrl = '/luci-static/resources/view/ipthrottle.version?t=' + Date.now();
 			var storageKey = 'ipthrottle_version';
+			
+			// 并行加载版本检查和 UCI 配置
+			// 实现原因: 同时获取版本信息和服务状态，减少等待时间
+			var statusPromise = fs.exec('/usr/sbin/ipthrottle', ['status'])
+				.then(function(res) { return res.stdout || ''; })
+				.catch(function() { return ''; });
 			
 			return fetch(versionUrl)
 				.then(function(res) { return res.text(); })
@@ -38,25 +46,58 @@
 					// 首次访问或版本一致，记录版本号
 					localStorage.setItem(storageKey, serverVersion);
 					
-					// 正常加载 UCI 配置
-					return uci.load('ipthrottle');
+					// 正常加载 UCI 配置，同时等待状态查询完成
+					return Promise.all([
+						uci.load('ipthrottle'),
+						statusPromise
+					]).then(function(results) {
+						return { status: results[1] };
+					});
 				})
 				.catch(function() {
 					// 版本文件读取失败（可能是旧版插件），继续正常加载
-					return uci.load('ipthrottle');
+					return uci.load('ipthrottle').then(function() {
+						return { status: '' };
+					});
 				});
 		},
 
-	render: function() {
+	render: function(data) {
 		var m, s, o;
+		var statusText = (data && data.status) ? data.status : '';
 
 		// 注入CSS：让placeholder文字颜色变暗，避免太亮太显眼
+		// 同时定义状态栏样式
 		var style = document.createElement('style');
-		style.textContent = '::placeholder { color: #999 !important; opacity: 1 !important; }';
+		style.textContent = '::placeholder { color: #999 !important; opacity: 1 !important; }' +
+			'.ipthrottle-status-bar { padding: 10px 15px; margin-bottom: 15px; border-radius: 5px; font-weight: bold; font-size: 14px; }' +
+			'.ipthrottle-status-running { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }' +
+			'.ipthrottle-status-stopped { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }';
 		document.head.appendChild(style);
 
 		m = new form.Map('ipthrottle', _('IPThrottle - 内网IP限速'),
 			_('按IP限制上传/下载带宽，支持独立/共享限速、IP范围、协议过滤、多WAN和时间计划'));
+
+		// ==========================================
+		// 运行状态横幅
+		// 实现原因: 用户进入页面时一眼就能看到服务是否在运行，
+		//          避免配置了规则但服务未启动导致限速不生效的问题。
+		// ==========================================
+		var statusSection = m.section(form.NamedSection, '__status__', '');
+		statusSection.render = function() {
+			var div = E('div', { 'class': 'ipthrottle-status-bar' });
+			if (statusText.indexOf('running') !== -1) {
+				div.className += ' ipthrottle-status-running';
+				// 提取规则数量
+				var ruleMatch = statusText.match(/Active IP throttle rules:\s*(\d+)/);
+				var ruleCount = ruleMatch ? ruleMatch[1] : '?';
+				div.appendChild(E('span', {}, '✅ IPThrottle ' + _('运行中') + ' — ' + _('活跃规则') + ': ' + ruleCount));
+			} else {
+				div.className += ' ipthrottle-status-stopped';
+				div.appendChild(E('span', {}, '❌ IPThrottle ' + _('未运行') + ' — ' + _('请检查服务状态')));
+			}
+			return div;
+		};
 
 		// ==========================================
 		// 规则列表（GridSection）- 精简版
