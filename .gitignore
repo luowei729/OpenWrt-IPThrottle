@@ -6,3 +6,4 @@
 *.ipk
 *.apk
 artifacts/
+.playwright-mcp/
