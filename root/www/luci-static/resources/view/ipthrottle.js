@@ -94,7 +94,7 @@
 				div.appendChild(E('span', {}, '✅ IPThrottle ' + _('运行中') + ' — ' + _('活跃规则') + ': ' + ruleCount));
 			} else {
 				div.className += ' ipthrottle-status-stopped';
-				div.appendChild(E('span', {}, '❌ IPThrottle ' + _('未运行') + ' — ' + _('请检查服务状态')));
+				div.appendChild(E('span', {}, '❌ IPThrottle ' + _('未运行') + ' — ' + _('请检查是否启用规则')));
 			}
 			return div;
 		};
