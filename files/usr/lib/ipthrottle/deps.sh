@@ -74,8 +74,54 @@ install_package() {
             return 1
             ;;
         opkg)
-            opkg update >/dev/null 2>&1
-            opkg install "$pkg" 2>&1
+            # OpenWrt 23/24 使用 opkg，同样需要处理锁冲突
+            # 实现原因: opkg install 期间持有 /var/lock/opkg.lock，
+            # 如果 postinst 触发服务启动并尝试安装依赖，会因锁冲突失败
+            local attempt=0
+            local output
+            local rc
+            
+            # opkg update 也需要重试
+            while [ $attempt -lt $max_retries ]; do
+                output=$(opkg update 2>&1)
+                rc=$?
+                if [ $rc -eq 0 ]; then
+                    break
+                fi
+                if echo "$output" | grep -qE "Could not lock|Resource temporarily unavailable"; then
+                    attempt=$((attempt + 1))
+                    deps_log "opkg locked during update, retrying in ${retry_delay}s ($attempt/$max_retries)..."
+                    sleep $retry_delay
+                else
+                    break
+                fi
+            done
+            
+            # opkg install
+            attempt=0
+            while [ $attempt -lt $max_retries ]; do
+                output=$(opkg install "$pkg" 2>&1)
+                rc=$?
+                
+                # 安装成功
+                if [ $rc -eq 0 ]; then
+                    echo "$output"
+                    return 0
+                fi
+                
+                # 检查是否是锁冲突错误
+                if echo "$output" | grep -qE "Could not lock|Resource temporarily unavailable"; then
+                    attempt=$((attempt + 1))
+                    deps_log "opkg locked, retrying in ${retry_delay}s ($attempt/$max_retries)..."
+                    sleep $retry_delay
+                else
+                    # 其他错误，不重试
+                    echo "$output"
+                    return 1
+                fi
+            done
+            deps_log "ERROR: Failed to install $pkg after $max_retries retries (opkg lock timeout)"
+            return 1
             ;;
         *)
             deps_log "ERROR: Unknown package manager"
