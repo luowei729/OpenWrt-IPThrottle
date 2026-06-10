@@ -8,44 +8,72 @@
 	return view.extend({
 		load: function() {
 			// ==========================================
-			// 缓存破坏机制
-			// 原因: LuCI 框架用 {cache:true} 加载 JS 模块，版本号绑定 luci.js 编译时间戳，
-			//       更新插件文件不会改变版本号，导致浏览器一直返回缓存。
-			// 方案: postinstall 时生成新时间戳写入静态文件，JS 加载时对比版本号，
-			//       不一致则强制刷新页面，确保用户看到最新版。
+			// 缓存破坏机制 v2（彻底解决浏览器刷新看不到新 UI 的问题）
+			//
+			// 问题根因:
+			//   1. LuCI 用 RequireJS {cache:true} 加载 JS 模块，模块 URL 绑定 luci.js 编译时间戳
+			//   2. 更新插件文件不改变时间戳 → 浏览器从 HTTP 缓存返回旧 JS
+			//   3. window.location.reload(true) 在现代浏览器已废弃，不能可靠绕过缓存
+			//   4. 即使 reload 成功，RequireJS 内存缓存仍可能返回旧模块
+			//
+			// 方案:
+			//   postinstall 时生成新时间戳写入 ipthrottle.version 文件，
+			//   JS 加载时 fetch 该文件（加 ?t= 防止自身被缓存），
+			//   检测版本不一致时，用 location.href 跳转到带 _v 参数的新 URL，
+			//   浏览器对全新 URL 不会使用任何缓存（HTTP 缓存、Service Worker 缓存、内存缓存）。
 			// ==========================================
 			var versionUrl = '/luci-static/resources/view/ipthrottle.version?t=' + Date.now();
 			var storageKey = 'ipthrottle_version';
-			
+
 			// 并行加载版本检查和 UCI 配置
 			// 实现原因: 同时获取版本信息和服务状态，减少等待时间
 			var statusPromise = fs.exec('/usr/sbin/ipthrottle', ['status'])
 				.then(function(res) { return res.stdout || ''; })
 				.catch(function() { return ''; });
-			
+
 			return fetch(versionUrl)
 				.then(function(res) { return res.text(); })
 				.then(function(serverVersion) {
 					serverVersion = serverVersion.trim();
 					var localVersion = localStorage.getItem(storageKey);
-					
-					// 版本号不一致 -> 插件已更新，强制刷新
+
+					// 版本号不一致 → 插件已更新，需要强制加载新代码
 					if (localVersion && localVersion !== serverVersion) {
-						// 清除 LuCI 模块缓存（内存中的 classes 对象）
+						// 1. 先更新 localStorage 版本号
+						// 原因: 新页面加载后会读到新版本号，避免再次触发刷新循环
+						localStorage.setItem(storageKey, serverVersion);
+
+						// 2. 清除 RequireJS 内存中的模块缓存
+						// 原因: LuCI 用 {cache:true} 加载模块，旧模块在内存中缓存
 						if (window.L && window.L.classes) {
 							delete window.L.classes['view.ipthrottle'];
 						}
-						// 更新本地版本号
-						localStorage.setItem(storageKey, serverVersion);
-						// 强制刷新页面，绕过浏览器 HTTP 缓存
-						window.location.reload(true);
-						// 返回一个永不 resolve 的 Promise，阻止页面继续渲染
+						// 清除 RequireJS 定义的模块，下次 require 时会重新加载
+						if (window.require && window.require.s) {
+							var moduleKey = 'view/ipthrottle';
+							// 删除 RequireJS 模块缓存和定义记录
+							delete window.require.s.contexts._._defined[moduleKey];
+							delete window.require.s.contexts._._loaded[moduleKey];
+						}
+
+						// 3. 用 location.href 跳转到带 _v 参数的新 URL
+						// 原因: reload(true) 已废弃不可靠；带新查询参数的 URL 是全新资源，
+						//       浏览器不会使用任何缓存（HTTP 缓存 / Service Worker / 内存缓存），
+						//       这是唯一能彻底绕过所有缓存层的可靠方法。
+						var url = window.location.pathname;
+						// 去掉旧的 _v 参数（如果存在）
+						url = url.replace(/[?&]_v=[^&]+/, '');
+						// 添加新 _v 参数
+						url += '?_v=' + serverVersion;
+						window.location.href = url;
+
+						// 返回永不 resolve 的 Promise，阻止页面继续渲染旧内容
 						return new Promise(function() {});
 					}
-					
+
 					// 首次访问或版本一致，记录版本号
 					localStorage.setItem(storageKey, serverVersion);
-					
+
 					// 正常加载 UCI 配置，同时等待状态查询完成
 					return Promise.all([
 						uci.load('ipthrottle'),

@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-06-10
+
+### Fixed
+- 北京时间 2026-06-10 19:25 - 彻底修复浏览器刷新看不到新 UI 的问题
+  - **问题根因**: LuCI 用 RequireJS `{cache:true}` 加载 JS 模块，模块 URL 绑定 luci.js 编译时间戳；
+    更新插件不改变时间戳 → 浏览器从 HTTP 缓存返回旧 JS；
+    `window.location.reload(true)` 在现代浏览器已废弃，不能可靠绕过缓存
+  - **修复方案 (缓存破坏 v2)**:
+    1. 检测版本不一致时，用 `location.href = pathname + '?_v=' + version` 跳转
+       - 原因: 带新查询参数的 URL 是全新资源，浏览器不使用任何缓存
+    2. 清除 RequireJS 内存模块缓存 (`require.s.contexts._._defined`)
+       - 原因: 即使 reload 成功，RequireJS 内存缓存仍返回旧模块
+    3. postinstall.sh 彻底清除 `/tmp/luci-*` 所有缓存
+       - 原因: 旧版只删 `/tmp/luci-modulecache/*`，目录不存在时失效
+  - **修改文件**: `ipthrottle.js` (缓存破坏逻辑), `postinstall.sh` (缓存清理)
+
 ## [1.0.8] - 2026-06-10
 
 ### Fixed
