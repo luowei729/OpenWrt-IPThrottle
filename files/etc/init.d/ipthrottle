@@ -57,7 +57,15 @@ install_deps() {
     logger -t ipthrottle "Installing dependencies..."
     
     # 安装 tc (包名因版本而异)
-    if ! command -v tc >/dev/null 2>&1; then
+    # 检查 tc 是否真正可用（不只是存在命令）
+    local tc_ok=0
+    if command -v tc >/dev/null 2>&1; then
+        if tc -V >/dev/null 2>&1; then
+            tc_ok=1
+        fi
+    fi
+    
+    if [ $tc_ok -eq 0 ]; then
         case "$pkg_mgr" in
             apk)
                 apk add tc-tiny 2>&1 | logger -t ipthrottle
@@ -70,8 +78,8 @@ install_deps() {
         esac
     fi
     
-    # 安装内核模块
-    for kmod in kmod-ifb kmod-sched-htb; do
+    # 安装内核模块 (kmod-sched 包含 htb, ingress, mirred 等)
+    for kmod in kmod-ifb kmod-sched; do
         case "$pkg_mgr" in
             apk)  apk add "$kmod" 2>&1 | logger -t ipthrottle ;;
             opkg) opkg install "$kmod" 2>&1 | logger -t ipthrottle ;;
