@@ -14,11 +14,12 @@ define Package/ipthrottle
   TITLE:=IP throttling control for OpenWrt
   
   # 依赖说明：
-  # - nftables: 用户空间工具（硬性依赖）
-  # - luci-base: LuCI 界面框架（硬性依赖）
-  # 注意：tc 和内核模块(kmod-*)包名在不同版本/架构不同，
-  # 运行时由 init.d 检测并安装（避免包管理器锁冲突）
-  DEPENDS:=+nftables +luci-base
+  # - nftables: nftables 用户空间工具
+  # - luci-base: LuCI 界面框架
+  # - tc: 流量控制工具（opkg: tc 或 tc-tiny, apk: tc-tiny）
+  # - kmod-ifb: IFB 虚拟网卡（入站限速必需）
+  # - kmod-sched: 流量调度模块（含 htb/ingress/mirred 等）
+  DEPENDS:=+nftables +luci-base +tc +kmod-ifb +kmod-sched
   PKGARCH:=all
 endef
 
