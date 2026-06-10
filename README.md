@@ -1,5 +1,9 @@
 # OpenWrt IP限速插件 (IPThrottle)
 
+**🌐 语言 / Language**: [中文](README.md) | [English](README_EN.md)
+
+---
+
 **精准控制每一台设备的网络带宽，告别网络拥堵。**
 
 基于 nftables + tc htb 的混合架构，实现按 IP 精确限速，支持独立/共享带宽模式。  
