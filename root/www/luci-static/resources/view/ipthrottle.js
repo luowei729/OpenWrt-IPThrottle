@@ -3,15 +3,57 @@
 'require form';
 'require uci';
 
-return view.extend({
-	load: function() {
-		return Promise.all([
-			uci.load('ipthrottle')
-		]);
-	},
+	return view.extend({
+		load: function() {
+			// ==========================================
+			// 缓存破坏机制
+			// 原因: LuCI 框架用 {cache:true} 加载 JS 模块，版本号绑定 luci.js 编译时间戳，
+			//       更新插件文件不会改变版本号，导致浏览器一直返回缓存。
+			// 方案: postinstall 时生成新时间戳写入静态文件，JS 加载时对比版本号，
+			//       不一致则强制刷新页面，确保用户看到最新版。
+			// ==========================================
+			var versionUrl = '/luci-static/resources/view/ipthrottle.version?t=' + Date.now();
+			var storageKey = 'ipthrottle_version';
+			
+			return fetch(versionUrl)
+				.then(function(res) { return res.text(); })
+				.then(function(serverVersion) {
+					serverVersion = serverVersion.trim();
+					var localVersion = localStorage.getItem(storageKey);
+					
+					// 版本号不一致 -> 插件已更新，强制刷新
+					if (localVersion && localVersion !== serverVersion) {
+						// 清除 LuCI 模块缓存（内存中的 classes 对象）
+						if (window.L && window.L.classes) {
+							delete window.L.classes['view.ipthrottle'];
+						}
+						// 更新本地版本号
+						localStorage.setItem(storageKey, serverVersion);
+						// 强制刷新页面，绕过浏览器 HTTP 缓存
+						window.location.reload(true);
+						// 返回一个永不 resolve 的 Promise，阻止页面继续渲染
+						return new Promise(function() {});
+					}
+					
+					// 首次访问或版本一致，记录版本号
+					localStorage.setItem(storageKey, serverVersion);
+					
+					// 正常加载 UCI 配置
+					return uci.load('ipthrottle');
+				})
+				.catch(function() {
+					// 版本文件读取失败（可能是旧版插件），继续正常加载
+					return uci.load('ipthrottle');
+				});
+		},
 
 	render: function() {
 		var m, s, o;
+
+		// 注入CSS：让placeholder文字颜色变暗，避免太亮太显眼
+		var style = document.createElement('style');
+		style.textContent = '::placeholder { color: #999 !important; opacity: 1 !important; }';
+		document.head.appendChild(style);
 
 		m = new form.Map('ipthrottle', _('IP限速设置'),
 			_('配置内网IP的限速规则'));
@@ -34,11 +76,11 @@ return view.extend({
 		o.rmempty = false;
 		o.placeholder = '例：客厅电视';
 
-		// 内网IP地址
+		// 内网IP地址（支持单IP和IP范围，如 192.168.1.100 或 192.168.1.100-192.168.1.200）
 		o = s.option(form.DynamicList, 'ip_entry', _('内网IP'));
 		o.rmempty = false;
-		o.placeholder = '192.168.1.100';
-		o.datatype = 'ip4addr("true")';
+		o.placeholder = '192.168.1.100 或 192.168.1.100-200';
+		o.description = _('支持单个IP或IP范围（用-连接），每行一个');
 
 		// 上传限速 - 标题带单位
 		o = s.option(form.Value, 'upload_kbps', _('上传<br/><small style="color:#999">Kbps</small>'));
@@ -74,12 +116,6 @@ return view.extend({
 		o.value('eth3.2', _('WAN4'));
 		o.default = 'all';
 		o.rmempty = false;
-		o.modalonly = true;
-
-		// IP范围（可选）
-		o = s.option(form.Value, 'ip_range', _('IP范围(可选)'));
-		o.placeholder = '192.168.1.100-192.168.1.200';
-		o.rmempty = true;
 		o.modalonly = true;
 
 		// 协议选择

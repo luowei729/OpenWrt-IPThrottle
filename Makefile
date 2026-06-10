@@ -57,4 +57,21 @@ define Package/ipthrottle/install
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/ipthrottle.js $(1)/www/luci-static/resources/view/
 endef
 
+# ==========================================
+# 安装后脚本（postinst）
+# 功能: 生成版本号，清除 LuCI 缓存
+# 原因: LuCI JS 框架缓存机制导致更新后浏览器仍显示旧版，
+#       需要生成新时间戳让 JS 检测到版本变化并强制刷新。
+# 注意: 此脚本在 opkg/apk install 时自动执行，
+#       在路由器上运行时 $IPKG_INSTROOT 为空。
+# ==========================================
+define Package/ipthrottle/postinst
+	#!/bin/sh
+	# 仅在路由器上实际安装时执行（非构建环境）
+	if [ -z "$${IPKG_INSTROOT}" ]; then
+		# 生成版本号并清除缓存
+		/usr/lib/ipthrottle/postinstall.sh
+	fi
+endef
+
 $(eval $(call BuildPackage,ipthrottle))

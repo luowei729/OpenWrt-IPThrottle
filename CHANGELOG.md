@@ -7,6 +7,94 @@
 
 ## [Unreleased]
 
+### Changed
+- 北京时间 2026-06-10 10:15 - 修复 LuCI 界面缓存不刷新问题（方案4：插件自增版本号）
+  - **问题根因**: LuCI JS 框架用 `{cache:true}` 加载模块，版本号绑定 `luci.js` 编译时间戳，
+    更新插件文件不会改变版本号，导致浏览器一直返回缓存，用户必须用隐身模式或 Ctrl+F5 才能看到新版
+  - **解决方案**: 插件自增版本号机制
+    - 新增 `/usr/lib/ipthrottle/postinstall.sh`：安装/更新时生成时间戳版本号
+    - 版本号写入两处：`/etc/ipthrottle/version` + `/www/luci-static/resources/view/ipthrottle.version`
+    - JS 加载时 fetch 版本文件，对比 localStorage 中的版本号
+    - 版本不一致 → 清除 LuCI 模块缓存 → 强制 reload 页面
+  - **Makefile 更新**: 添加 `Package/ipthrottle/postinst` 定义，opkg/apk 安装后自动执行
+  - **浏览器测试验证**: 更新版本号后刷新页面，localStorage 版本号自动更新，页面正常显示最新版
+- 北京时间 2026-06-10 10:05 - LuCI 界面优化：IP输入合并 + placeholder 暗色
+  - **IP输入合并**: 将"内网IP"(ip_entry)和"IP范围"(ip_range)合并为统一输入框
+    - 用户可在同一字段填写单IP(192.168.1.100)或IP范围(192.168.1.100-200)
+    - 移除独立的 ip_range 弹窗字段，简化UI
+    - 后端 ip_entry_parse() 已原生支持两种格式，无需后端改动
+  - **placeholder 样式**: 注入CSS让placeholder颜色变暗(#999)，避免过于显眼
+  - **description 提示**: ip_entry 字段增加说明文字"支持单个IP或IP范围（用-连接），每行一个"
+- 北京时间 2026-06-10 09:30 - 架构重构：混合方案替代 IFB 方案，passwall 下上下行限速均生效
+  - **架构变更**: 上传 tc 挂在 WAN 物理设备，下载 tc 挂在 LAN 网桥 (br-lan)
+  - **核心原理**: 
+    - 上传流量路径: 客户端 → br-lan(ingress) → IP栈路由 → WAN(egress) → 互联网
+      → tc htb 挂在 WAN egress，按 upload_mark 分类限速
+    - 下载流量路径: 互联网 → WAN(ingress) → IP栈路由 → br-lan(egress) → 客户端
+      → tc htb 挂在 br-lan egress，按 download_mark 分类限速
+  - **nftables 标记方案**:
+    - 上传方向: `ip saddr <client_ip> meta mark set <upload_mark>` (mark 100+)
+    - 下载方向: `ip daddr <client_ip> meta mark set <download_mark>` (mark 1100+)
+    - forward chain priority -1 确保在 passwall (priority 0) 之前标记
+  - **passwall 兼容性**: 
+    - nftables forward chain 在 passwall 之前执行标记，代理流量也能被正确限速
+    - 无需在 passwall 中添加源 IP 白名单（之前的 workaround 不再需要）
+  - **简化**: 移除 IFB 设备、skbedit 模块、tc ingress 过滤器等复杂组件
+  - **移除的函数**: load_ifb_module, load_skbedit_module, setup_ifb_for_wan, generate_ingress_filters, cleanup_ifb_for_wan
+  - **新增的函数**: get_lan_bridge (LAN 网桥检测), get_download_mark_for_rule
+  - **重构的函数**: apply_tc_to_device (通用化，支持上传/下载两个方向)
+  - **class ID 方案**: 上传 IP class minor=1000+, 下载 IP class minor=2000+
+  - **iperf3 测试结果** (外网服务器 47.102.196.219):
+    - 上传: 4.79 Mbit/s (限制 5Mbps) ✓, eth1 class 1:2012 标记 7273 次 overlimits
+    - 下载: 4.88 Mbit/s (限制 5Mbps) ✓, br-lan class 1:3012 标记 5670 次 overlimits
+    - 下载每秒稳定在 4.86-4.99 Mbit/s，限速精确
+  - **passwall 兼容性验证**:
+    - 移除 passwall 白名单后重新测试，限速仍然完全生效
+    - 上传: 4.79 Mbit/s ✓, 下载: 4.88 Mbit/s ✓
+    - 原因: nftables forward chain priority -1 在 passwall (priority 0) 之前标记，
+      代理流量仍经过 WAN egress 和 br-lan egress，tc htb 正常限速
+    - 结论: 无需任何 passwall 白名单配置，开箱即用
+
+### Fixed
+- 北京时间 2026-06-10 08:42 - 修复 mark 冲突和 passwall 兼容性问题
+  - **mark 冲突修复**: 将 ipthrottle 的 mark 起始值从 1 改为 100，避免与 passwall (mark=1) 冲突
+  - **passwall 兼容方案**: 在 passwall PSW_NAT 链中添加源 IP 白名单规则 `ip saddr <client_ip> return`
+    - 让指定客户端的流量绕过 passwall 透明代理，直接走正常路由
+    - 这样流量会经过 nftables forward chain，ipthrottle 可以正确标记和限速
+  - **测试结果**: 
+    - 上传限速: ✅ 生效 (speedtest 显示 4.73 Mbit/s，配置 5Mbps)
+    - 下载限速: ⚠️ 架构限制 (ingress 过滤器在 NAT 之前执行，无法匹配 LAN IP)
+  - **待解决**: 下载限速需要在 conntrack 层面或 PREROUTING 之后标记，待后续版本实现
+- 北京时间 2026-06-10 07:59 - 修复独立模式 IP class ceil 设置错误
+  - 问题: 独立模式下 IP class 的 ceil 被设置为总带宽（如 100Mbit），导致可以借用未使用带宽超过限速值
+  - 修复: 独立模式下 IP class 的 ceil 也设置为限速值（如 5120Kbit），确保不能超过限速
+  - 共享模式保持不变（ceil 设置为总带宽，由父 class 统一限制）
+  - 测试环境: ImmortalWrt 24.10.6 (10.0.0.201) + Debian 客户端 (10.0.0.210)
+- 北京时间 2026-06-10 07:46 - 恢复 passwall 翻墙服务
+  - 因测试需要临时停止了 passwall，导致网络代理异常
+  - 已恢复 passwall 正常运行，HTTP 连通性验证通过
+  - ipthrottle 规则已恢复为仅 10.0.100.2
+- 北京时间 2026-06-10 07:24 - 修复下载限速完全无效的严重 Bug（三个关键缺陷）
+  - **Bug1: nftables 无法标记下载流量**
+    - 根因: nftables forward chain 对 mirred 重定向到 IFB 的包不生效（redirect 绕过 netfilter forward hook）
+    - 现象: 下载包永远不被标记，全部走默认不限速 class，导致下载速度等于 WAN 全速（100Mbps）
+    - 修复: 改用 tc ingress 过滤器 + skbedit 在 WAN 入站方向（重定向之前）设置 skb mark
+    - 过滤器: `u32 match ip dst <客户端IP> action skbedit mark <N> action mirred egress redirect dev ifb<N>`
+    - 使用 pref 100/200 确保 per-IP 过滤器优先于 catch-all 执行
+  - **Bug2: 下载/上传 TC 设备挂反**
+    - 根因: tc 只能限速出口(egress)方向。代码将 download tc 挂在 WAN 设备（WAN egress=上传），upload tc 挂在 IFB 设备（IFB egress=下载）
+    - 现象: download_kbps 设置实际限制了上传速度，upload_kbps 设置实际限制了下载速度
+    - 修复: 交换设备分配 — 下载 tc 挂在 IFB 设备，上传 tc 挂在 WAN 设备
+  - **Bug3: wan/wan6 共享物理设备重复处理**
+    - 根因: wan(IPv4) 和 wan6(IPv6) 逻辑接口共享同一物理设备(eth1)，代码按逻辑接口逐个处理导致第二次覆盖第一次
+    - 现象: IFB 重定向从 ifb0 被覆盖到 ifb1，ifb0 闲置浪费资源
+    - 修复: 先构建 (物理设备, 逻辑接口) 映射，按唯一物理设备去重处理
+  - **依赖更新**: deps.sh 新增 act_skbedit 内核模块检测
+  - **验证结果**: 
+    - 上传限速: eth1 class 1:2012 已正确限制 10.0.100.2 的上传流量 ✓
+    - 下载机制: 临时过滤器测试成功匹配 8,743 bytes 下载流量 ✓
+    - reload/stop/start 功能正常 ✓
+
 ### Added
 - 北京时间 2026-06-10 06:50 - 依赖自动检测和安装功能
   - 新增 `/usr/lib/ipthrottle/deps.sh` 依赖检测脚本

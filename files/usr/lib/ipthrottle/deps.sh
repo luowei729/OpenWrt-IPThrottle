@@ -182,8 +182,14 @@ check_all_deps() {
     # sch_ingress: ingress qdisc 支持
     ensure_kmod "sch_ingress" "kmod-sched" || true  # 可能已内置
     
-    # act_mirred: 流量重定向到 ifb
+    # act_mirred: 流量重定向到 ifb（入站流量镜像到 IFB 虚拟设备）
     ensure_kmod "act_mirred" "kmod-sched" || true  # 可能已内置
+    
+    # act_skbedit: 在 tc ingress 过滤器中设置 skb mark
+    # 实现原因: 下载方向的包需要在 WAN ingress 阶段（重定向到 IFB 之前）设置 mark，
+    #           nftables forward chain 对 mirred 重定向的包不生效，
+    #           因此必须使用 tc ingress + skbedit 在重定向前标记下载包
+    ensure_kmod "act_skbedit" "kmod-sched" || true  # 可能已内置
     
     if [ $failed -eq 0 ]; then
         deps_log "All dependencies OK"

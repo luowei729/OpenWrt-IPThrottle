@@ -4,10 +4,22 @@
 # 文件: /usr/lib/ipthrottle/core.sh
 # 功能: 生成 tc/nft 命令、应用规则、服务控制
 # 创建时间: 2026-06-09
+# 最后修改: 2026-06-10
 # 设计说明: 
 #   由于 OpenWrt ash shell 的管道会创建子 shell，变量修改不会传递到父 shell，
 #   所有跨循环的状态都通过临时文件管理。循环使用 "while read ... done < file"
 #   形式而不是 "xxx | while read ..." 形式，避免子 shell 问题。
+#
+# 架构说明 (v3 - 混合方案):
+#   上传和下载流量经过不同的网络设备，需要分别挂载 tc htb:
+#   - 上传流量路径: 客户端 → br-lan(ingress) → IP栈路由 → WAN(egress) → 互联网
+#     → tc htb 挂在 WAN 物理设备上（如 eth1）
+#   - 下载流量路径: 互联网 → WAN(ingress) → IP栈路由 → br-lan(egress) → 客户端
+#     → tc htb 挂在 LAN 网桥上（如 br-lan）
+#   nftables forward chain 同时标记上传(ip saddr)和下载(ip daddr)方向，
+#   使用不同的 mark 值区分方向：upload_mark = mark, download_mark = mark + 1000。
+#   此方案无需 IFB 设备、skbedit 模块、tc ingress 过滤器，
+#   且与 passwall 等透明代理兼容（代理流量仍经过 nftables forward 和对应设备 egress）。
 # ==========================================
 
 # 加载依赖模块
@@ -26,8 +38,6 @@ core_log_msg() {
 # ==========================================
 # 临时文件管理
 # ==========================================
-# 使用临时文件代替全局变量，避免子 shell 作用域问题
-# 所有临时文件放在 /tmp/ipthrottle_work/ 目录下
 WORK_DIR="/tmp/ipthrottle_work"
 
 # 初始化工作目录
@@ -42,8 +52,9 @@ MARK_MAP_FILE="$WORK_DIR/mark_map"             # rule -> mark 映射
 COUNTER_FILE="$WORK_DIR/counter"               # 全局 ID 计数器
 
 # 初始化全局计数器（写入文件避免子 shell 问题）
+# 从 100 开始，避免与 passwall 等工具的 mark=1 冲突
 init_counter() {
-    echo "1" > "$COUNTER_FILE"
+    echo "100" > "$COUNTER_FILE"
 }
 
 # 获取并递增计数器（每次调用返回当前值并自增 1）
@@ -79,14 +90,56 @@ mbps_to_tc_rate() {
 }
 
 # ==========================================
+# LAN 网桥设备检测
+# ==========================================
+
+# 获取 LAN 网桥设备名
+# 输出: 网桥设备名 (如 br-lan)
+# 实现原因: 下载 tc htb 需要挂在 LAN 网桥上
+# 实现思路:
+#   1. 优先从 UCI 配置 network.lan.device 获取
+#   2. 其次从 UCI 配置 network.lan.ifname 获取（旧版 OpenWrt）
+#   3. 都失败则使用默认值 "br-lan"
+get_lan_bridge() {
+    local bridge=""
+    
+    # 方法1: 从 network.lan.device 获取（OpenWrt 21+）
+    bridge=$(uci -q get network.lan.device)
+    if [ -n "$bridge" ] && ip link show "$bridge" >/dev/null 2>&1; then
+        echo "$bridge"
+        return 0
+    fi
+    
+    # 方法2: 从 network.lan.ifname 获取（旧版 OpenWrt）
+    bridge=$(uci -q get network.lan.ifname)
+    if [ -n "$bridge" ] && ip link show "$bridge" >/dev/null 2>&1; then
+        echo "$bridge"
+        return 0
+    fi
+    
+    # 方法3: 默认值 br-lan（OpenWrt 标准命名）
+    if ip link show "br-lan" >/dev/null 2>&1; then
+        echo "br-lan"
+        return 0
+    fi
+    
+    core_log_msg "ERROR" "Cannot detect LAN bridge device"
+    return 1
+}
+
+# ==========================================
 # 规则排序和准备（Phase 1）
 # ==========================================
 
 # 准备：获取所有 active 规则，分配 mark 和 rule_index
 # 输出：写入 SORTED_RULES_FILE 和 MARK_MAP_FILE
 # 格式：SORTED_RULES_FILE 每行 = "priority rule_section"
-#       MARK_MAP_FILE 每行 = "rule_section mark rule_index"
-# 实现原因: 全局 mark 分配和 rule 索引需要在单个 shell 上下文中完成，避免子 shell 变量丢失
+#       MARK_MAP_FILE 每行 = "rule_section mark"
+# mark 分配方案:
+#   - 每条规则分配一个基础 mark (从 100 开始递增)
+#   - 上传方向使用基础 mark (如 100)
+#   - 下载方向使用 mark + 1000 (如 1100)
+#   - tc fw filter 通过不同的 handle 值区分上下行
 prepare_rules() {
     core_log_msg "INFO" "Preparing rule list (mark assignment and sorting)"
     
@@ -96,20 +149,17 @@ prepare_rules() {
     local tmp_sorted="$WORK_DIR/tmp_presort"
     > "$tmp_sorted"
     
-    # 第一遍：遍历所有 enabled 且 schedule 匹配的规则，记录 priority
+    # 遍历所有 enabled 且 schedule 匹配的规则
     local config
     for config in $(uci -q show ipthrottle | grep '=rule$' | sed 's/^ipthrottle\.//;s/=rule$//'); do
-        # 跳过 disabled 规则
         local enabled
         enabled=$(uci -q get ipthrottle."$config".enabled)
         [ "$enabled" = "1" ] || continue
         
-        # 检查 schedule 是否生效（当前时间）
         if ! check_rule_should_active "$config"; then
             continue
         fi
         
-        # 读取 priority（默认 10，clamp 1-99）
         local priority
         priority=$(uci -q get ipthrottle."$config".priority)
         [ -z "$priority" ] && priority=10
@@ -119,14 +169,12 @@ prepare_rules() {
         echo "${priority} ${config}" >> "$tmp_sorted"
     done
     
-    # 按 priority 升序稳定排序
     sort -n -k1 -s "$tmp_sorted" > "$SORTED_RULES_FILE"
     
-    # 第二遍：分配唯一 mark 和 rule_index
+    # 分配唯一 mark
     > "$MARK_MAP_FILE"
     init_counter
     
-    # 使用临时文件避免管道子 shell 问题
     while read -r _priority _rule; do
         [ -z "$_rule" ] && continue
         local _mark
@@ -134,22 +182,30 @@ prepare_rules() {
         echo "$_rule $_mark" >> "$MARK_MAP_FILE"
     done < "$SORTED_RULES_FILE"
     
-    # 统计
     local _count
     _count=$(wc -l < "$SORTED_RULES_FILE" 2>/dev/null)
     core_log_msg "INFO" "Prepared $_count active rules"
 }
 
-# 根据 rule section 查询 mark
+# 根据 rule section 查询上传方向 mark
 # 参数: $1=rule section
 # 输出: mark 值
 get_mark_for_rule() {
     awk -v r="$1" '$1==r {print $2}' "$MARK_MAP_FILE"
 }
 
+# 获取规则的下载方向 mark（= 上传 mark + 1000）
+# 参数: $1=rule section
+# 输出: 下载方向的 mark 值
+# 实现原因: 上传和下载使用不同的 mark 值，tc fw filter 通过 handle 区分方向
+get_download_mark_for_rule() {
+    local mark
+    mark=$(get_mark_for_rule "$1")
+    [ -n "$mark" ] && echo $((mark + 1000))
+}
+
 # 获取规则的 wan_mask 解析后的接口列表（输出到文件）
 # 参数: $1=rule section, $2=输出文件
-# 实现原因: 避免子 shell 管道问题
 get_rule_wans_to_file() {
     local rule="$1"
     local outfile="$2"
@@ -161,72 +217,11 @@ get_rule_wans_to_file() {
 }
 
 # ==========================================
-# IFB 设备管理
+# tc htb 层级树生成
 # ==========================================
 
-# 加载 ifb 内核模块（服务启动时仅调用一次）
-# 实现原因: ifb 模块需要在创建 IFB 设备前加载
-load_ifb_module() {
-    if ! lsmod 2>/dev/null | grep -q "^ifb "; then
-        modprobe ifb numifbs=16 2>/dev/null
-    fi
-}
-
-# 为 WAN 接口设置 IFB 设备（用于上行限速）
-# 参数: $1=WAN 物理设备名, $2=IFB 索引
-# 实现流程:
-#   1. 启动 ifbX 设备
-#   2. 在 WAN 物理设备上添加 ingress qdisc
-#   3. 将 ingress 方向流量镜像到 ifb 设备
-# 实现原因: Linux tc 只能限速出口方向，入站限速需通过 ifb 设备间接实现
-setup_ifb_for_wan() {
-    local wan_dev="$1"
-    local ifb_idx="$2"
-    local ifb_dev="ifb${ifb_idx}"
-    
-    core_log_msg "INFO" "Setting up IFB $ifb_dev for WAN device $wan_dev"
-    
-    # 创建 IFB 设备（如果不存在）
-    if ! ip link show "$ifb_dev" >/dev/null 2>&1; then
-        ip link add "$ifb_dev" type ifb 2>/dev/null || {
-            core_log_msg "ERROR" "Failed to create $ifb_dev"
-            return 1
-        }
-    fi
-    
-    # 启动 ifb 设备
-    ip link set "$ifb_dev" up 2>/dev/null
-    
-    # 清理 ifb 设备上旧的 qdisc
-    tc qdisc del dev "$ifb_dev" root 2>/dev/null
-    
-    # 在 WAN 设备添加 ingress qdisc
-    tc qdisc del dev "$wan_dev" ingress 2>/dev/null
-    tc qdisc add dev "$wan_dev" ingress
-    
-    # 将 ingress 流量重定向到 IFB
-    tc filter add dev "$wan_dev" parent ffff: protocol all \
-        u32 match u32 0 0 \
-        action mirred egress redirect dev "$ifb_dev"
-}
-
-# 清理 WAN 接口的 IFB 设置
-cleanup_ifb_for_wan() {
-    local wan_dev="$1"
-    local ifb_idx="$2"
-    local ifb_dev="ifb${ifb_idx}"
-    
-    tc filter del dev "$wan_dev" parent ffff: 2>/dev/null
-    tc qdisc del dev "$wan_dev" ingress 2>/dev/null
-    tc qdisc del dev "$ifb_dev" root 2>/dev/null
-}
-
-# ==========================================
-# tc htb 层级树生成（根节点）
-# ==========================================
-
-# 为 WAN 物理设备创建根 htb qdisc
-# 参数: $1=物理设备名, $2=总带宽 (mbit/s)
+# 在设备上创建根 htb qdisc
+# 参数: $1=设备名, $2=总带宽 (mbit/s)
 # 实现原因: tc htb 需要一个根 qdisc 和根 class，作为所有限速 class 的父节点
 create_root_htb() {
     local dev="$1"
@@ -236,15 +231,15 @@ create_root_htb() {
     tc qdisc del dev "$dev" root 2>/dev/null
     
     # 添加根 htb qdisc，默认 class 9999 (不限制)
-    # 使用紧凑的 class ID 方案避免溢出：
+    # class ID 方案:
     # - 1:1 = 根 class
     # - 1:priority (1-99) = 优先级 class
     # - 1:(100 + priority*10 + rule_idx) = 规则 class (110-1089)
-    # - 1:(1000 + priority*100 + rule_idx*10 + ip_id) = IP class (1000-65535)
+    # - 1:(1000 + priority*100 + rule_idx*10 + ip_id) = IP class (1000+)
     tc qdisc add dev "$dev" root handle 1: htb default 9999
     tc class add dev "$dev" parent 1: classid 1:1 \
         htb rate "${total_bw}mbit" ceil "${total_bw}mbit"
-    # 默认 class（未匹配的流量）
+    # 默认 class（未匹配的流量，不限速）
     tc class add dev "$dev" parent 1:1 classid 1:9999 \
         htb rate "${total_bw}mbit" ceil "${total_bw}mbit"
     
@@ -255,53 +250,49 @@ create_root_htb() {
 # nftables 规则生成（Phase 2）
 # ==========================================
 
-# 生成 nftables 配置文件（/tmp/ipthrottle.nft）
-# 实现原因: nftables 支持通过 -f 加载配置文件，比逐条调用 nft 命令效率高
-# 输出: /tmp/ipthrottle.nft
+# 生成 nftables 配置文件
+# 输出: $WORK_DIR/ipthrottle.nft
+# 规则说明:
+#   - 上传方向: ip saddr <client_ip> → set mark <upload_mark>
+#   - 下载方向: ip daddr <client_ip> → set mark <download_mark> (= upload_mark + 1000)
+#   - 支持协议过滤 (tcp/udp/tcp+udp/any)
+#   - forward chain priority -1 确保在 passwall 之前执行
 generate_nftables_config() {
     local nft_file="$WORK_DIR/ipthrottle.nft"
     core_log_msg "INFO" "Generating nftables config: $nft_file"
     
-    # 写入文件头：创建新表
-    # 注意: flush 在表不存在时会报错，所以先 add table 再 flush
     cat > "$nft_file" << 'HEADER'
 #!/usr/sbin/nft -f
 # OpenWrt-IPThrottle 自动生成的 nftables 规则
-# 注意: 本文件由 ipthrottle 服务自动生成，请勿手动修改
+# 架构: 混合方案 - 上传 tc 在 WAN，下载 tc 在 br-lan
 
 add table ip ipthrottle
 flush table ip ipthrottle
 HEADER
     
-    # 创建 forward chain
-    # 注意: ip family 只支持 forward/output/input 等 hook，不支持 ingress
-    # ingress 方向的流量通过 IFB 设备在 tc 层面处理，不需要 nftables ingress chain
+    # 创建 forward chain，priority -1 在 passwall (priority 0) 之前执行
     {
         echo ""
         echo "add chain ip ipthrottle forward { type filter hook forward priority -1 ; policy accept ; }"
     } >> "$nft_file"
     
-    # 临时文件，保存 forward 规则
     local fwd_rules="$WORK_DIR/nft_fwd"
     > "$fwd_rules"
     
-    # 临时文件：存放每条规则展开后的 IP 列表
     local ip_list_file="$WORK_DIR/rule_ips"
     
-    # 遍历排序后的规则
     while read -r _priority _rule; do
         [ -z "$_rule" ] && continue
         
-        local _mark
-        _mark=$(get_mark_for_rule "$_rule")
-        [ -z "$_mark" ] && continue
+        local _mark_up _mark_down
+        _mark_up=$(get_mark_for_rule "$_rule")
+        _mark_down=$(get_download_mark_for_rule "$_rule")
+        [ -z "$_mark_up" ] && continue
         
-        # 读取协议
         local _proto
         _proto=$(uci -q get ipthrottle."$_rule".proto)
         [ -z "$_proto" ] && _proto="any"
         
-        # 展开所有 IP 到临时文件
         ip_entries_for_rule "$_rule" | ip_dedup_sort > "$ip_list_file"
         
         [ -s "$ip_list_file" ] || {
@@ -309,34 +300,37 @@ HEADER
             continue
         }
         
-        # 为每个 IP 生成匹配规则
-        # 注意: 只使用 forward chain，ingress 方向通过 IFB + tc 处理
         local _ip
         while read -r _ip; do
             [ -z "$_ip" ] && continue
             
             case "$_proto" in
                 tcp)
-                    # forward: 匹配出站方向（源 IP 为 LAN IP）
-                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
+                    # 上传: 源 IP 为客户端 TCP
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark_up" >> "$fwd_rules"
+                    # 下载: 目标 IP 为客户端 TCP
+                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto tcp meta mark set $_mark_down" >> "$fwd_rules"
                     ;;
                 udp)
-                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark_up" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto udp meta mark set $_mark_down" >> "$fwd_rules"
                     ;;
                 tcp+udp)
-                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark" >> "$fwd_rules"
-                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto tcp meta mark set $_mark_up" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto tcp meta mark set $_mark_down" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta l4proto udp meta mark set $_mark_up" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip daddr $_ip meta l4proto udp meta mark set $_mark_down" >> "$fwd_rules"
                     ;;
                 *)
-                    # any：不限制协议
-                    echo "add rule ip ipthrottle forward ip saddr $_ip meta mark set $_mark" >> "$fwd_rules"
+                    # any: 不限制协议
+                    echo "add rule ip ipthrottle forward ip saddr $_ip meta mark set $_mark_up" >> "$fwd_rules"
+                    echo "add rule ip ipthrottle forward ip daddr $_ip meta mark set $_mark_down" >> "$fwd_rules"
                     ;;
             esac
         done < "$ip_list_file"
         
     done < "$SORTED_RULES_FILE"
     
-    # 合并规则到配置文件
     cat "$fwd_rules" >> "$nft_file"
     
     core_log_msg "INFO" "NFT config generated"
@@ -346,13 +340,11 @@ HEADER
 load_nftables_config() {
     local nft_file="$WORK_DIR/ipthrottle.nft"
     
-    # 语法检查
     if ! nft -c -f "$nft_file" 2>/tmp/ipthrottle_nft_err; then
         core_log_msg "ERROR" "NFT syntax check failed: $(cat /tmp/ipthrottle_nft_err)"
         return 1
     fi
     
-    # 原子加载：先 flush 后添加，使用单条 nft -f 调用
     if ! nft -f "$nft_file" 2>/tmp/ipthrottle_nft_err; then
         core_log_msg "ERROR" "NFT load failed: $(cat /tmp/ipthrottle_nft_err)"
         return 1
@@ -365,29 +357,34 @@ load_nftables_config() {
 # tc 规则生成（Phase 3）
 # ==========================================
 
-# 为单个 WAN 物理设备应用所有相关规则
-# 参数: $1=物理设备名, $2=方向（up/down）, $3=WAN 带宽 (mbit/s), $4=WAN 逻辑接口名
-# 实现原因: 每个 WAN 设备+方向 独立挂载一套 tc 层级树
+# 在指定设备上应用 tc 规则（单方向）
+# 参数: $1=设备名, $2=方向(up/down), $3=带宽(mbit/s), $4=IP class minor 偏移量
+# 实现原因:
+#   - 上传 tc 挂在 WAN 设备上，使用上传 IP class (minor 偏移 1000)
+#   - 下载 tc 挂在 br-lan 上，使用下载 IP class (minor 偏移 2000)
+#   - 两个设备使用相同的 class ID 结构，但 IP class minor 不同避免冲突
+# 参数说明:
+#   $4: 上传方向传 1000，下载方向传 2000
+#       IP class minor = $4 + priority*100 + rule_idx*10 + ip_id
 apply_tc_to_device() {
     local dev="$1"
-    local direction="$2"
+    local direction="$2"    # up 或 down
     local total_bw="$3"
-    local wan_iface="$4"
+    local ip_minor_offset="$4"  # 1000(上传) 或 2000(下载)
     
-    core_log_msg "INFO" "Applying TC rules for device=$dev direction=$direction bw=${total_bw}mbit"
+    core_log_msg "INFO" "Applying TC rules on $dev direction=$direction bw=${total_bw}mbit offset=$ip_minor_offset"
     
     # 创建根 htb
     create_root_htb "$dev" "$total_bw"
     
-    # 临时文件：当前处理的 priority 集合（用于创建 priority class）
-    local priority_seen="$WORK_DIR/priority_seen_${dev}_${direction}"
+    # 临时文件：当前处理的 priority 集合
+    local priority_seen="$WORK_DIR/priority_seen_${direction}"
     > "$priority_seen"
     
-    # 临时文件：每条规则的 IP 列表
-    local ip_list_file="$WORK_DIR/rule_ips_tc"
+    local ip_list_file="$WORK_DIR/rule_ips_tc_${direction}"
     
-    # 用于分配 IP 全局 index（避免冲突）
-    local ip_counter="$WORK_DIR/ip_counter_${dev}_${direction}"
+    # IP 全局 index 计数器
+    local ip_counter="$WORK_DIR/ip_counter_${direction}"
     echo "1" > "$ip_counter"
     
     next_ip_id() {
@@ -397,23 +394,18 @@ apply_tc_to_device() {
         echo "$_id"
     }
     
-    # 遍历排序后的规则
+    # ============================================================
+    # 第一遍：创建 tc class 层级树
+    # ============================================================
     while read -r _priority _rule; do
         [ -z "$_rule" ] && continue
         
-        # 检查规则的 wan_mask 是否包含当前 WAN 接口
-        local rule_wans_file="$WORK_DIR/rule_wans"
-        get_rule_wans_to_file "$_rule" "$rule_wans_file" || continue
-        
-        if ! grep -q "^${wan_iface}$" "$rule_wans_file"; then
-            continue
-        fi
-        
-        # 读取限速参数
-        local _mode _rate_kbps
+        local _mode
         _mode=$(uci -q get ipthrottle."$_rule".mode)
         [ -z "$_mode" ] && _mode="independent"
         
+        # 根据方向读取对应的限速参数
+        local _rate_kbps
         if [ "$direction" = "up" ]; then
             _rate_kbps=$(uci -q get ipthrottle."$_rule".upload_kbps)
         else
@@ -425,27 +417,24 @@ apply_tc_to_device() {
         _rate_str=$(kbps_to_tc_rate "$_rate_kbps")
         
         # 创建 priority class（每个 priority 仅一次）
-        # priority class ID: 1:priority (1-99)
         if ! grep -qx "$_priority" "$priority_seen"; then
             tc class add dev "$dev" parent 1:1 classid "1:$_priority" \
                 htb rate "${total_bw}mbit" ceil "${total_bw}mbit" 2>/dev/null
             echo "$_priority" >> "$priority_seen"
         fi
         
-        # 分配 rule index 和 rule class ID
-        # rule class ID: 1:(100 + priority*10 + rule_idx) 范围 110-1089
+        # 分配 rule index
         local _rule_idx
         _rule_idx=$(next_ip_id)
         local rule_minor=$(( 100 + _priority * 10 + _rule_idx ))
         
-        # 创建 rule class（独立 vs 共享模式不同）
-        # 父 class 是 priority class (1:priority)
+        # 创建 rule class
         if [ "$_mode" = "independent" ]; then
-            # 独立限速：rule class rate=WAN总带宽（不在此层限制）
+            # 独立限速：rule class 不限速，由 IP class 限制
             tc class add dev "$dev" parent "1:$_priority" classid "1:${rule_minor}" \
                 htb rate "${total_bw}mbit" ceil "${total_bw}mbit"
         else
-            # 共享限速：rule class rate=限速值（所有 IP class 共享此带宽）
+            # 共享限速：rule class 限速，所有 IP class 共享
             tc class add dev "$dev" parent "1:$_priority" classid "1:${rule_minor}" \
                 htb rate "$_rate_str" ceil "$_rate_str"
         fi
@@ -460,82 +449,88 @@ apply_tc_to_device() {
             
             local _ip_id
             _ip_id=$(next_ip_id)
-            # IP class ID: 1:(1000 + priority*100 + rule_idx*10 + ip_id)
-            # 范围 1000-65535，确保不溢出
-            local ip_minor=$(( 1000 + _priority * 100 + _rule_idx * 10 + _ip_id ))
+            # IP class minor = offset + priority*100 + rule_idx*10 + ip_id
+            local ip_minor=$(( ip_minor_offset + _priority * 100 + _rule_idx * 10 + _ip_id ))
             
-            local ip_rate
+            local ip_rate ip_ceil
             if [ "$_mode" = "independent" ]; then
-                # 独立：每个 IP 有独立的 rate 限制
+                # 独立：每个 IP 有独立的 rate 和 ceil
                 ip_rate="$_rate_str"
+                ip_ceil="$_rate_str"
             else
-                # 共享：IP class rate 不设限制，由父 class 统一限制
-                # tc 不支持 rate=0，但可以用极小速率（1kbit）作为最小保证
+                # 共享：由父 class 统一限制
                 ip_rate="1kbit"
+                ip_ceil="${total_bw}mbit"
             fi
             
             tc class add dev "$dev" parent "1:${rule_minor}" classid "1:${ip_minor}" \
-                htb rate "$ip_rate" ceil "${total_bw}mbit"
+                htb rate "$ip_rate" ceil "$ip_ceil"
         done < "$ip_list_file"
         
     done < "$SORTED_RULES_FILE"
     
-    # 生成 tc filter（按 mark 将流量引入对应 IP class）
-    # 需要重新遍历规则和 IP 列表（因为 filter 需要知道 IP class ID）
+    # ============================================================
+    # 第二遍：创建 tc filter（按 mark 将流量引入对应 IP class）
+    # ============================================================
     echo "1" > "$ip_counter"
     
     while read -r _priority _rule; do
         [ -z "$_rule" ] && continue
         
-        # 再次检查 wan_mask
-        local rule_wans_file="$WORK_DIR/rule_wans2"
-        get_rule_wans_to_file "$_rule" "$rule_wans_file" || continue
-        grep -q "^${wan_iface}$" "$rule_wans_file" || continue
-        
+        # 根据方向获取对应的 mark
         local _mark
-        _mark=$(get_mark_for_rule "$_rule")
+        if [ "$direction" = "up" ]; then
+            _mark=$(get_mark_for_rule "$_rule")
+        else
+            _mark=$(get_download_mark_for_rule "$_rule")
+        fi
         [ -z "$_mark" ] && continue
         
-        local _rule_idx
-        _rule_idx=$(next_ip_id)  # 与上一轮保持一致
+        # 检查方向是否有限速配置
+        local _rate_kbps
+        if [ "$direction" = "up" ]; then
+            _rate_kbps=$(uci -q get ipthrottle."$_rule".upload_kbps)
+        else
+            _rate_kbps=$(uci -q get ipthrottle."$_rule".download_kbps)
+        fi
+        [ -z "$_rate_kbps" ] && continue
         
-        # 展开 IP 列表
+        local _rule_idx
+        _rule_idx=$(next_ip_id)
+        
         ip_entries_for_rule "$_rule" | ip_dedup_sort > "$ip_list_file"
         [ -s "$ip_list_file" ] || continue
         
-        # 为每个 IP 创建 filter
         while read -r _ip; do
             [ -z "$_ip" ] && continue
             
             local _ip_id
             _ip_id=$(next_ip_id)
-            # IP class ID: 与前面创建 class 时保持一致
-            local ip_minor=$(( 1000 + _priority * 100 + _rule_idx * 10 + _ip_id ))
+            local ip_minor=$(( ip_minor_offset + _priority * 100 + _rule_idx * 10 + _ip_id ))
             
-            # 使用 fw filter，按 mark 匹配，路由到相应 class
+            # fw filter: handle <mark> → IP class
             tc filter add dev "$dev" parent 1:0 protocol ip \
                 handle "$_mark" fw classid "1:${ip_minor}"
         done < "$ip_list_file"
     done < "$SORTED_RULES_FILE"
     
-    core_log_msg "INFO" "TC rules applied to $dev"
+    core_log_msg "INFO" "TC rules applied to $dev direction=$direction"
 }
 
 # ==========================================
 # 服务主函数
 # ==========================================
 
-# 启动服务：完整初始化
+# 启动服务
 # 实现流程:
-#   1. 加载 ifb 内核模块
-#   2. 准备规则列表（mark + 优先级排序）
-#   3. 为每个 WAN 接口设置 IFB
-#   4. 为每个 WAN 接口 + 每个方向 应用 tc 规则
-#   5. 生成并加载 nftables 规则
+#   1. 准备规则列表（mark + 优先级排序）
+#   2. 检测 WAN 设备和 LAN 网桥
+#   3. 在 WAN 设备上创建上传 tc htb（标记 upload_mark）
+#   4. 在 LAN 网桥上创建下载 tc htb（标记 download_mark）
+#   5. 生成并加载 nftables 规则（同时标记上传和下载方向）
 start_service() {
-    core_log_msg "INFO" "====== ipthrottle service starting ======"
+    core_log_msg "INFO" "====== ipthrottle service starting (hybrid mode) ======"
     
-    # 准备数据：规则排序和 mark 分配
     init_work_dir
     prepare_rules
     
@@ -546,59 +541,107 @@ start_service() {
         return 0
     fi
     
-    # 加载 ifb 模块（用于上行限速）
-    load_ifb_module
+    # ============================================================
+    # 检测网络设备
+    # ============================================================
     
-    # 获取所有 WAN 接口
-    local wans_file="$WORK_DIR/all_wans"
-    get_wan_interfaces > "$wans_file" || {
+    # 检测 LAN 网桥（下载 tc 挂在此设备上）
+    local lan_bridge
+    lan_bridge=$(get_lan_bridge) || {
+        core_log_msg "ERROR" "Cannot detect LAN bridge device"
+        return 1
+    }
+    core_log_msg "INFO" "LAN bridge: $lan_bridge"
+    
+    # 获取 WAN 接口（上传 tc 挂在 WAN 物理设备上）
+    local all_wans_file="$WORK_DIR/all_wans"
+    get_wan_interfaces > "$all_wans_file" || {
         core_log_msg "ERROR" "No WAN interfaces found"
         return 1
     }
     
-    local ifb_idx=0
-    local wan_iface
+    # ============================================================
+    # 按物理设备去重 WAN 接口
+    # 实现原因: wan/wan6 可能共享同一物理设备（如 eth1）
+    # ============================================================
+    local pairs_file="$WORK_DIR/dev_iface_pairs"
+    > "$pairs_file"
     
+    local wan_iface
     while read -r wan_iface; do
         [ -z "$wan_iface" ] && continue
-        
-        core_log_msg "INFO" "Processing WAN interface: $wan_iface"
-        
-        # 获取 WAN 逻辑接口对应的物理设备名
         local wan_dev
         wan_dev=$(get_wan_device "$wan_iface") || {
             core_log_msg "WARN" "WAN $wan_iface has no device, skipping"
             continue
         }
-        
-        # 获取上下行带宽
-        local up_bw down_bw
-        up_bw=$(get_wan_bandwidth "$wan_iface" "up")
-        down_bw=$(get_wan_bandwidth "$wan_iface" "down")
-        
-        core_log_msg "INFO" "WAN $wan_iface: device=$wan_dev, up=${up_bw}Mbps, down=${down_bw}Mbps"
-        
-        # 设置 IFB 设备（用于上行限速）
-        setup_ifb_for_wan "$wan_dev" "$ifb_idx"
-        
-        # 下行：直接在 WAN 物理设备上创建
-        apply_tc_to_device "$wan_dev" "down" "$down_bw" "$wan_iface"
-        
-        # 上行：在 IFB 设备上创建
-        local ifb_dev="ifb${ifb_idx}"
-        apply_tc_to_device "$ifb_dev" "up" "$up_bw" "$wan_iface"
-        
-        ifb_idx=$((ifb_idx + 1))
-    done < "$wans_file"
+        echo "$wan_dev $wan_iface" >> "$pairs_file"
+    done < "$all_wans_file"
     
-    # 生成并加载 nftables 规则
+    local unique_devs_file="$WORK_DIR/unique_devs"
+    awk '!seen[$1]++ {print $1}' "$pairs_file" > "$unique_devs_file"
+    
+    # 保存设备信息供 stop_service 使用
+    echo "$lan_bridge" > "$WORK_DIR/lan_bridge_saved"
+    cp "$unique_devs_file" "$WORK_DIR/unique_devs_saved"
+    cp "$pairs_file" "$WORK_DIR/pairs_saved"
+    
+    # ============================================================
+    # Phase 1: 为每个 WAN 物理设备创建上传 tc htb
+    # ============================================================
+    # 上传流量路径: 客户端 → br-lan → IP栈 → WAN(egress) → 互联网
+    # tc htb 挂在 WAN egress，按 upload_mark 分类限速
+    
+    local wan_dev
+    while read -r wan_dev; do
+        [ -z "$wan_dev" ] && continue
+        
+        # 获取此物理设备对应的逻辑接口列表
+        local lif_file="$WORK_DIR/lif_${wan_dev}"
+        grep "^${wan_dev} " "$pairs_file" | awk '{print $2}' > "$lif_file"
+        
+        local first_lif
+        first_lif=$(head -1 "$lif_file")
+        local up_bw
+        up_bw=$(get_wan_bandwidth "$first_lif" "up")
+        
+        core_log_msg "INFO" "Upload TC on WAN device: $wan_dev (${up_bw}mbit)"
+        
+        # 上传 tc: IP class minor 偏移 1000
+        apply_tc_to_device "$wan_dev" "up" "$up_bw" 1000
+        
+    done < "$unique_devs_file"
+    
+    # ============================================================
+    # Phase 2: 在 LAN 网桥上创建下载 tc htb
+    # ============================================================
+    # 下载流量路径: 互联网 → WAN → IP栈 → br-lan(egress) → 客户端
+    # tc htb 挂在 br-lan egress，按 download_mark 分类限速
+    
+    # 获取第一个 WAN 接口的下载带宽
+    local first_wan
+    first_wan=$(head -1 "$all_wans_file")
+    local down_bw
+    down_bw=$(get_wan_bandwidth "$first_wan" "down")
+    
+    core_log_msg "INFO" "Download TC on LAN bridge: $lan_bridge (${down_bw}mbit)"
+    
+    # 下载 tc: IP class minor 偏移 2000
+    apply_tc_to_device "$lan_bridge" "down" "$down_bw" 2000
+    
+    # ============================================================
+    # Phase 3: 生成并加载 nftables 规则
+    # ============================================================
+    # nftables forward chain 同时标记:
+    #   - 上传: ip saddr <client_ip> → mark <upload_mark> (100+)
+    #   - 下载: ip daddr <client_ip> → mark <download_mark> (1100+)
     generate_nftables_config
     load_nftables_config || {
         core_log_msg "ERROR" "Failed to load nftables rules, service start aborted"
         return 1
     }
     
-    core_log_msg "INFO" "====== ipthrottle service started successfully ======"
+    core_log_msg "INFO" "====== ipthrottle service started successfully (hybrid mode) ======"
 }
 
 # 停止服务：清理所有 ipthrottle 创建的 tc/nft 规则
@@ -608,25 +651,26 @@ stop_service() {
     # 删除 nftables ipthrottle 表
     nft delete table ip ipthrottle 2>/dev/null
     
-    # 清理每个 WAN 接口的 IFB 和 tc
-    local wans_file="$WORK_DIR/all_wans"
-    if [ -f "$WORK_DIR/all_wans" ]; then
-        local ifb_idx=0
-        local wan_iface
-        
-        while read -r wan_iface; do
-            [ -z "$wan_iface" ] && continue
-            local wan_dev
-            wan_dev=$(get_wan_device "$wan_iface") || continue
-            
-            # 清理 IFB（包括 ingress 重定向）
-            cleanup_ifb_for_wan "$wan_dev" "$ifb_idx"
-            
-            # 清理 WAN 物理设备上的根 qdisc
+    # 清理 LAN 网桥上的 tc（下载方向）
+    local lan_bridge=""
+    if [ -f "$WORK_DIR/lan_bridge_saved" ]; then
+        lan_bridge=$(cat "$WORK_DIR/lan_bridge_saved")
+    else
+        lan_bridge=$(get_lan_bridge 2>/dev/null)
+    fi
+    if [ -n "$lan_bridge" ]; then
+        core_log_msg "INFO" "Cleaning up download TC on $lan_bridge"
+        tc qdisc del dev "$lan_bridge" root 2>/dev/null
+    fi
+    
+    # 清理 WAN 物理设备上的 tc（上传方向）
+    if [ -f "$WORK_DIR/unique_devs_saved" ]; then
+        local wan_dev
+        while read -r wan_dev; do
+            [ -z "$wan_dev" ] && continue
+            core_log_msg "INFO" "Cleaning up upload TC on $wan_dev"
             tc qdisc del dev "$wan_dev" root 2>/dev/null
-            
-            ifb_idx=$((ifb_idx + 1))
-        done < "$wans_file"
+        done < "$WORK_DIR/unique_devs_saved"
     fi
     
     # 清理工作目录
@@ -636,7 +680,6 @@ stop_service() {
 }
 
 # 重新加载：先 stop 再 start
-# 实现原因: reload 需要全量重建，确保规则一致性
 reload_service() {
     core_log_msg "INFO" "Reloading ipthrottle configuration"
     stop_service
@@ -644,29 +687,24 @@ reload_service() {
 }
 
 # ==========================================
-# CLI 命令入口（用于调试和手动操作）
+# CLI 命令入口
 # ==========================================
 
-# ipthrottle 命令: apply (应用当前配置)
 cmd_apply() {
     start_service
 }
 
-# ipthrottle 命令: clear (清除所有规则)
 cmd_clear() {
     stop_service
 }
 
-# ipthrottle 命令: reload (重新加载)
 cmd_reload() {
     reload_service
 }
 
-# ipthrottle 命令: status (查看当前状态)
 cmd_status() {
-    echo "=== ipthrottle 服务状态 ==="
+    echo "=== ipthrottle 服务状态 (hybrid mode) ==="
     
-    # 检查 nftables ipthrottle 表
     echo "nftables 表:"
     if nft list table ip ipthrottle 2>/dev/null | head -3; then
         echo "  ✓ ipthrottle 表已加载"
@@ -674,21 +712,43 @@ cmd_status() {
         echo "  ✗ ipthrottle 表未加载"
     fi
     
-    # 检查 tc 配置
+    # LAN 网桥（下载 tc）
+    local lan_bridge
+    lan_bridge=$(get_lan_bridge 2>/dev/null)
     echo ""
-    echo "tc qdisc:"
-    tc qdisc show 2>/dev/null | grep -v "noqueue\|fq_codel" | head -20
+    echo "LAN 网桥 (下载TC): ${lan_bridge:-未检测到}"
+    if [ -n "$lan_bridge" ]; then
+        echo "  tc qdisc:"
+        tc qdisc show dev "$lan_bridge" 2>/dev/null | grep -v "noqueue\|fq_codel" | head -5
+    fi
+    
+    # WAN 设备（上传 tc）
+    echo ""
+    echo "WAN 设备 (上传TC):"
+    local all_wans_file="$WORK_DIR/all_wans"
+    if [ -f "$all_wans_file" ]; then
+        while read -r wan_iface; do
+            [ -z "$wan_iface" ] && continue
+            local wan_dev
+            wan_dev=$(get_wan_device "$wan_iface" 2>/dev/null) || continue
+            echo "  $wan_iface → $wan_dev:"
+            tc qdisc show dev "$wan_dev" 2>/dev/null | grep -v "noqueue\|fq_codel" | head -5
+        done < "$all_wans_file"
+    else
+        echo "  服务未运行"
+    fi
     
     echo ""
     echo "活跃规则:"
     prepare_rules 2>/dev/null
     if [ -s "$SORTED_RULES_FILE" ]; then
         while read -r _p _r; do
-            local _mark
-            _mark=$(get_mark_for_rule "$_r")
+            local _mark_up _mark_down
+            _mark_up=$(get_mark_for_rule "$_r")
+            _mark_down=$(get_download_mark_for_rule "$_r")
             local _name
             _name=$(uci -q get ipthrottle."$_r".name)
-            echo "  priority=$_p mark=$_mark rule=$_r name=$_name"
+            echo "  priority=$_p mark_up=$_mark_up mark_down=$_mark_down rule=$_r name=$_name"
         done < "$SORTED_RULES_FILE"
     else
         echo "  无活跃规则"
