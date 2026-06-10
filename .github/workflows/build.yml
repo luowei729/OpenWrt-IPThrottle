@@ -34,11 +34,11 @@ jobs:
             pkg_format: 'ipk'
             sdk_compress: 'tar.zst'
           
-          # OpenWrt 25.12.0 (实际下载 SNAPSHOT SDK)：输出 .apk 格式（apk 包管理器）
-          # sdk_version 控制实际下载的 SDK 版本，openwrt_version 用于产物命名
+          # OpenWrt 25.12.4：输出 .apk 格式（apk 包管理器）
+          # 使用稳定版 SDK 而非 SNAPSHOT，避免每次重新编译依赖
           - arch: 'x86_64'
-            openwrt_version: '25.12.0'
-            sdk_version: 'SNAPSHOT'
+            openwrt_version: '25.12.4'
+            sdk_version: '25.12.4'
             pkg_format: 'apk'
             sdk_compress: 'tar.zst'
     
