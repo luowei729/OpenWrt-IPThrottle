@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-10
+
 ### Added
 - 北京时间 2026-06-10 12:28 - passwall 代理上传限速支持
   - **问题根因**: passwall TCP 使用 REDIRECT 将上传流量重定向到本地代理进程(sing-box)，
