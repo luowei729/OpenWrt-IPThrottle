@@ -1,9 +1,14 @@
 #!/bin/sh
 # ==========================================
-# OpenWrt IPThrottle 插件 - 依赖检测与安装
+# OpenWrt IPThrottle 插件 - 依赖检测（只检测，不安装）
 # 文件: /usr/lib/ipthrottle/deps.sh
-# 功能: 检测并自动安装运行所需的依赖包
+# 功能: 检测运行所需依赖是否就绪，缺失时输出警告+安装指令
 # 创建时间: 2026-06-10
+# 修改时间: 2026-06-10 14:40
+# 设计原因:
+#   依赖安装由包管理器(opkg/apk)在安装时原子完成（Makefile DEPENDS:= 声明）。
+#   服务运行时只做检测+警告，绝不调用 opkg/apk 安装（会触发死锁）。
+#   若用户手动删除依赖，此脚本提示如何补装。
 # ==========================================
 
 # 日志函数
@@ -12,15 +17,9 @@ deps_log() {
     echo "[ipthrottle-deps] $1"
 }
 
-# 检测包管理器类型
-detect_pkg_manager() {
-    if command -v apk >/dev/null 2>&1; then
-        echo "apk"
-    elif command -v opkg >/dev/null 2>&1; then
-        echo "opkg"
-    else
-        echo "unknown"
-    fi
+deps_warn() {
+    logger -t "ipthrottle-deps" "WARNING: $1"
+    echo "[ipthrottle-deps] WARNING: $1"
 }
 
 # 检查命令是否存在
@@ -28,254 +27,106 @@ check_command() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# 检查内核模块是否已加载
+# 检查内核模块是否已加载（支持已编入内核的情况）
 check_kmod() {
-    lsmod 2>/dev/null | grep -q "^$1 "
+    # lsmod 显示已加载模块
+    lsmod 2>/dev/null | grep -q "^$1 " && return 0
+    # 检查是否编入内核（/lib/modules/.../modules.builtin）
+    find /lib/modules -name "modules.builtin" -exec grep -q "$1" {} \; 2>/dev/null && return 0
+    return 1
 }
 
-# 安装依赖包
-install_package() {
-    local pkg="$1"
-    local pkg_mgr="$2"
-    local max_retries=10
-    local retry_delay=3
-    
-    deps_log "Installing package: $pkg"
-    
-    case "$pkg_mgr" in
-        apk)
-            # OpenWrt 25+ 使用 apk，需要处理数据库锁冲突
-            # 实现原因: 包安装后 procd 自动启动服务，此时 apk 数据库可能仍被锁
-            local attempt=0
-            local output
-            local rc
-            while [ $attempt -lt $max_retries ]; do
-                output=$(apk add "$pkg" 2>&1)
-                rc=$?
-                
-                # 安装成功
-                if [ $rc -eq 0 ]; then
-                    echo "$output"
-                    return 0
-                fi
-                
-                # 检查是否是锁冲突错误（"Unable to lock database" 或 "Resource temporarily unavailable"）
-                if echo "$output" | grep -qE "Unable to lock database|Resource temporarily unavailable"; then
-                    attempt=$((attempt + 1))
-                    deps_log "apk database locked, retrying in ${retry_delay}s ($attempt/$max_retries)..."
-                    sleep $retry_delay
-                else
-                    # 其他错误，不重试
-                    echo "$output"
-                    return 1
-                fi
-            done
-            deps_log "ERROR: Failed to install $pkg after $max_retries retries (apk lock timeout)"
-            return 1
-            ;;
-        opkg)
-            # OpenWrt 23/24 使用 opkg，同样需要处理锁冲突
-            # 实现原因: opkg install 期间持有 /var/lock/opkg.lock，
-            # 如果 postinst 触发服务启动并尝试安装依赖，会因锁冲突失败
-            local attempt=0
-            local output
-            local rc
-            
-            # opkg update 也需要重试
-            while [ $attempt -lt $max_retries ]; do
-                output=$(opkg update 2>&1)
-                rc=$?
-                if [ $rc -eq 0 ]; then
-                    break
-                fi
-                if echo "$output" | grep -qE "Could not lock|Resource temporarily unavailable"; then
-                    attempt=$((attempt + 1))
-                    deps_log "opkg locked during update, retrying in ${retry_delay}s ($attempt/$max_retries)..."
-                    sleep $retry_delay
-                else
-                    break
-                fi
-            done
-            
-            # opkg install
-            attempt=0
-            while [ $attempt -lt $max_retries ]; do
-                output=$(opkg install "$pkg" 2>&1)
-                rc=$?
-                
-                # 安装成功
-                if [ $rc -eq 0 ]; then
-                    echo "$output"
-                    return 0
-                fi
-                
-                # 检查是否是锁冲突错误
-                if echo "$output" | grep -qE "Could not lock|Resource temporarily unavailable"; then
-                    attempt=$((attempt + 1))
-                    deps_log "opkg locked, retrying in ${retry_delay}s ($attempt/$max_retries)..."
-                    sleep $retry_delay
-                else
-                    # 其他错误，不重试
-                    echo "$output"
-                    return 1
-                fi
-            done
-            deps_log "ERROR: Failed to install $pkg after $max_retries retries (opkg lock timeout)"
-            return 1
-            ;;
-        *)
-            deps_log "ERROR: Unknown package manager"
-            return 1
-            ;;
-    esac
-}
+# ============ 只检测函数 ============
 
-# 检查并安装 tc 命令
-ensure_tc() {
+# 检测 tc 命令
+check_tc() {
     if check_command tc; then
-        # tc 已存在，检查是否可用
         if tc -V >/dev/null 2>&1; then
             deps_log "tc command OK"
             return 0
         fi
     fi
-    
-    deps_log "tc command not found, installing..."
-    local pkg_mgr
-    pkg_mgr=$(detect_pkg_manager)
-    
-    case "$pkg_mgr" in
-        apk)
-            # OpenWrt 25+ 使用 apk，包名为 tc-tiny
-            install_package "tc-tiny" "$pkg_mgr"
-            ;;
-        opkg)
-            # OpenWrt 24 及更早版本使用 opkg
-            # 尝试多个可能的包名
-            if opkg list | grep -q "^tc "; then
-                install_package "tc" "$pkg_mgr"
-            elif opkg list | grep -q "^iproute2-tc "; then
-                install_package "iproute2-tc" "$pkg_mgr"
-            else
-                # 默认尝试 tc
-                install_package "tc" "$pkg_mgr"
-            fi
-            ;;
-    esac
-    
-    # 验证安装
-    if check_command tc && tc -V >/dev/null 2>&1; then
-        deps_log "tc installed successfully"
-        return 0
-    else
-        deps_log "ERROR: Failed to install tc"
-        return 1
-    fi
+    deps_warn "tc command not found! Install: opkg install tc  OR  apk add tc-tiny"
+    return 1
 }
 
-# 检查并加载内核模块
-ensure_kmod() {
-    local kmod_name="$1"
-    local pkg_name="$2"
-    
-    if check_kmod "$kmod_name"; then
-        deps_log "Kernel module $kmod_name already loaded"
-        return 0
-    fi
-    
-    # 尝试 modprobe 加载
-    modprobe "$kmod_name" 2>/dev/null
-    if check_kmod "$kmod_name"; then
-        deps_log "Kernel module $kmod_name loaded"
-        return 0
-    fi
-    
-    # 模块未加载，尝试安装
-    deps_log "Installing kernel module: $pkg_name"
-    local pkg_mgr
-    pkg_mgr=$(detect_pkg_manager)
-    install_package "$pkg_name" "$pkg_mgr"
-    
-    # 再次尝试加载
-    modprobe "$kmod_name" 2>/dev/null
-    if check_kmod "$kmod_name"; then
-        deps_log "Kernel module $kmod_name installed and loaded"
-        return 0
-    else
-        deps_log "WARNING: Failed to load kernel module $kmod_name"
-        return 1
-    fi
-}
-
-# 检查并安装 nftables
-ensure_nft() {
+# 检测 nft 命令
+check_nft() {
     if check_command nft; then
         deps_log "nft command OK"
         return 0
     fi
-    
-    deps_log "nft command not found, installing..."
-    local pkg_mgr
-    pkg_mgr=$(detect_pkg_manager)
-    
-    case "$pkg_mgr" in
-        apk)
-            install_package "nftables" "$pkg_mgr"
-            ;;
-        opkg)
-            install_package "nftables" "$pkg_mgr"
-            ;;
-    esac
-    
-    if check_command nft; then
-        deps_log "nft installed successfully"
-        return 0
-    else
-        deps_log "ERROR: Failed to install nft"
-        return 1
-    fi
+    deps_warn "nft command not found! Install: opkg install nftables  OR  apk add nftables"
+    return 1
 }
 
-# 主函数：检查所有依赖
+# 检测内核模块（仅警告，不安装）
+check_kmod_only() {
+    local kmod_name="$1"
+    local pkg_name="$2"
+    local optional="$3"  # "optional" = 缺少不报错
+    
+    if check_kmod "$kmod_name"; then
+        deps_log "kmod $kmod_name OK"
+        return 0
+    fi
+    
+    # 尝试 modprobe 加载（模块可能已安装但未加载）
+    modprobe "$kmod_name" 2>/dev/null
+    if check_kmod "$kmod_name"; then
+        deps_log "kmod $kmod_name loaded via modprobe"
+        return 0
+    fi
+    
+    if [ "$optional" = "optional" ]; then
+        deps_warn "kmod $kmod_name not loaded (optional, may be built-in or not needed)"
+    else
+        deps_warn "kmod $kmod_name not found! Install: opkg/apk install $pkg_name, then modprobe $kmod_name"
+        return 1
+    fi
+    return 0
+}
+
+# ============ 主函数 ============
+
 check_all_deps() {
     deps_log "Checking dependencies..."
     local failed=0
     
-    # 1. 检查 tc 命令
-    ensure_tc || failed=1
+    # 1. 检测 tc 命令
+    check_tc || failed=1
     
-    # 2. 检查 nft 命令
-    ensure_nft || failed=1
+    # 2. 检测 nft 命令
+    check_nft || failed=1
     
-    # 3. 检查内核模块
-    # ifb: 用于入站限速
-    ensure_kmod "ifb" "kmod-ifb" || failed=1
+    # 3. 检测内核模块
+    # ifb: IFB 虚拟网卡（入站流量镜像目标）
+    check_kmod_only "ifb" "kmod-ifb" "" || failed=1
     
-    # sched: 流量调度（包含 htb）
-    ensure_kmod "sch_htb" "kmod-sched" || failed=1
+    # sch_htb: HTB 流量调度（核心模块，必须）
+    check_kmod_only "sch_htb" "kmod-sched-htb" "" || failed=1
     
-    # sch_ingress: ingress qdisc 支持
-    ensure_kmod "sch_ingress" "kmod-sched" || true  # 可能已内置
+    # sch_ingress: ingress qdisc（可选，某些固件已内置）
+    check_kmod_only "sch_ingress" "kmod-sched" "optional"
     
-    # act_mirred: 流量重定向到 ifb（入站流量镜像到 IFB 虚拟设备）
-    ensure_kmod "act_mirred" "kmod-sched" || true  # 可能已内置
+    # act_mirred: 流量重定向到 IFB（可选，某些固件已内置）
+    check_kmod_only "act_mirred" "kmod-sched" "optional"
     
-    # act_skbedit: 在 tc ingress 过滤器中设置 skb mark
-    # 实现原因: 下载方向的包需要在 WAN ingress 阶段（重定向到 IFB 之前）设置 mark，
-    #           nftables forward chain 对 mirred 重定向的包不生效，
-    #           因此必须使用 tc ingress + skbedit 在重定向前标记下载包
-    ensure_kmod "act_skbedit" "kmod-sched" || true  # 可能已内置
+    # act_skbedit: 在 tc ingress 设置 skb mark
+    # 实现原因: 下载方向包需在 WAN ingress 标记（重定向到 IFB 之前），
+    #           nftables forward chain 对 mirred 重定向包不生效
+    check_kmod_only "act_skbedit" "kmod-sched" "optional"
     
     if [ $failed -eq 0 ]; then
         deps_log "All dependencies OK"
         return 0
     else
-        deps_log "ERROR: Some dependencies failed to install"
+        deps_warn "Some dependencies missing! Install them manually, then run: /etc/init.d/ipthrottle restart"
         return 1
     fi
 }
 
-# 如果直接执行此脚本，运行检查
+# 独立执行此脚本时运行检测
 if [ "${0##*/}" = "deps.sh" ] || [ "${0##*/}" = "ipthrottle-deps" ]; then
     check_all_deps
 fi

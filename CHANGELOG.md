@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-06-10
+
+### Fixed
+- 北京时间 2026-06-10 14:45 - 彻底修复全新安装死锁问题（OpenWrt 23/24/25）
+  - **根本原因**: deps.sh 在 service start 时调用 opkg/apk 安装依赖，与包管理器冲突死锁
+  - **其他插件没这问题的原因**: 它们在 Makefile `DEPENDS:=` 声明所有依赖，包管理器原子安装
+  - **修复方案**: 
+    1. Makefile `DEPENDS:=` 添加 `+tc||+tc-tiny +kmod-ifb +kmod-sched-core +kmod-sched-htb`（标准做法）
+    2. deps.sh 改为**只检测+警告+打印安装命令**，绝不调用 opkg/apk
+    3. init.d 去除锁等待逻辑，正常启动
+
+## [Unreleased]
+
 ## [1.0.2] - 2026-06-10
 
 ### Fixed
