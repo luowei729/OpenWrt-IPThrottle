@@ -1,0 +1,23 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - link "ImmortalWrt" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - img [ref=e7]
+      - generic [ref=e8]: ImmortalWrt
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - text: 
+          - textbox [ref=e12]: root
+        - generic [ref=e13]:
+          - text: 
+          - textbox [active] [ref=e14]
+      - button "登录" [ref=e17] [cursor=pointer]
+  - contentinfo [ref=e18]:
+    - generic [ref=e19]:
+      - link "Powered by LuCI (HEAD detached at a701807e) branch (26.145.09311~a701807)" [ref=e20] [cursor=pointer]:
+        - /url: https://github.com/openwrt/luci
+      - link "ArgonTheme v2.4.3" [ref=e21] [cursor=pointer]:
+        - /url: https://github.com/jerrykuku/luci-theme-argon
+      - link "ImmortalWrt 25.12.0-r37854-4b24da3b4c5c" [ref=e22] [cursor=pointer]:
+        - /url: https://immortalwrt.org/

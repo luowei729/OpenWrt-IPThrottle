@@ -1,0 +1,107 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - link "ImmortalWrt" [ref=e5]:
+        - /url: "#"
+      - list [ref=e6]:
+        - listitem [ref=e7] [cursor=pointer]:
+          - link " 状态 " [ref=e8]:
+            - /url: /cgi-bin/luci/admin/status
+        - listitem [ref=e9] [cursor=pointer]:
+          - link " 系统 " [ref=e10]:
+            - /url: /cgi-bin/luci/admin/system
+        - listitem [ref=e11] [cursor=pointer]:
+          - link " 服务 " [ref=e12]:
+            - /url: /cgi-bin/luci/admin/services
+        - listitem [ref=e13] [cursor=pointer]:
+          - link " 网络 " [ref=e14]:
+            - /url: /cgi-bin/luci/admin/network
+          - list [ref=e15]:
+            - listitem [ref=e16]:
+              - link "接口" [ref=e17]:
+                - /url: /cgi-bin/luci/admin/network/network
+            - listitem [ref=e18]:
+              - link "路由" [ref=e19]:
+                - /url: /cgi-bin/luci/admin/network/routes
+            - listitem [ref=e20]:
+              - link "DHCP" [ref=e21]:
+                - /url: /cgi-bin/luci/admin/network/dhcp
+            - listitem [ref=e22]:
+              - link "DNS" [ref=e23]:
+                - /url: /cgi-bin/luci/admin/network/dns
+            - listitem [ref=e24]:
+              - link "网络诊断" [ref=e25]:
+                - /url: /cgi-bin/luci/admin/network/diagnostics
+            - listitem [ref=e26]:
+              - link "IPThrottle" [ref=e27]:
+                - /url: /cgi-bin/luci/admin/network/ipthrottle
+            - listitem [ref=e28]:
+              - link "防火墙" [ref=e29]:
+                - /url: /cgi-bin/luci/admin/network/firewall
+        - listitem [ref=e30] [cursor=pointer]:
+          - link " 退出" [ref=e31]:
+            - /url: /cgi-bin/luci/admin/logout
+    - generic [ref=e32]:
+      - banner [ref=e33]
+      - generic [ref=e36]:
+        - generic [ref=e38]:
+          - generic [ref=e39]:
+            - heading "IP限速设置" [level=2] [ref=e40]
+            - generic [ref=e41]: 配置内网IP的限速规则
+            - generic [ref=e42]:
+              - heading "规则列表" [level=3] [ref=e43]
+              - table [ref=e44]:
+                - rowgroup [ref=e45]:
+                  - row "启用 规则名称 内网IP 上传 Kbps 下载 Kbps 生效时间" [ref=e46]:
+                    - columnheader "启用" [ref=e47]
+                    - columnheader "规则名称" [ref=e48]
+                    - columnheader "内网IP" [ref=e49]
+                    - columnheader "上传 Kbps" [ref=e50]:
+                      - text: 上传
+                      - text: Kbps
+                    - columnheader "下载 Kbps" [ref=e51]:
+                      - text: 下载
+                      - text: Kbps
+                    - columnheader "生效时间" [ref=e52]
+                    - columnheader [ref=e53]
+                  - row "支持单个IP或IP范围（用-连接），每行一个" [ref=e54]:
+                    - columnheader [ref=e55]
+                    - columnheader [ref=e56]
+                    - columnheader "支持单个IP或IP范围（用-连接），每行一个" [ref=e57]
+                    - columnheader [ref=e58]
+                    - columnheader [ref=e59]
+                    - columnheader [ref=e60]
+                    - columnheader [ref=e61]
+                - rowgroup [ref=e62]:
+                  - row "否 示例-笔记本电脑 10.0.100.2 5120 5120 always ☰ 编辑 删除" [ref=e63]:
+                    - cell "否" [ref=e64]
+                    - cell "示例-笔记本电脑" [ref=e65]
+                    - cell "10.0.100.2" [ref=e66]
+                    - cell "5120" [ref=e67]
+                    - cell "5120" [ref=e68]
+                    - cell "always" [ref=e69]
+                    - cell "☰ 编辑 删除" [ref=e70]:
+                      - generic [ref=e71]:
+                        - button "☰" [ref=e72]
+                        - button "编辑" [ref=e73] [cursor=pointer]
+                        - button "删除" [ref=e74] [cursor=pointer]
+              - button "添加" [ref=e76] [cursor=pointer]
+          - generic [ref=e77]:
+            - generic [ref=e78] [cursor=pointer]:
+              - list [ref=e79]:
+                - listitem [ref=e80]: 保存并应用
+              - generic [ref=e81]: ···
+              - generic [ref=e82]: ▾
+            - button "保存" [ref=e83] [cursor=pointer]
+            - button "复位" [ref=e84] [cursor=pointer]
+        - contentinfo [ref=e85]:
+          - generic [ref=e86]:
+            - link "Powered by LuCI (HEAD detached at a701807e) branch (26.145.09311~a701807)" [ref=e87] [cursor=pointer]:
+              - /url: https://github.com/openwrt/luci
+            - generic [ref=e88]: "|"
+            - link "ArgonTheme v2.4.3" [ref=e89] [cursor=pointer]:
+              - /url: https://github.com/jerrykuku/luci-theme-argon
+            - generic [ref=e90]: "|"
+            - link "ImmortalWrt 25.12.0-r37854-4b24da3b4c5c" [ref=e91] [cursor=pointer]:
+              - /url: https://immortalwrt.org/
+  - dialog [ref=e93]

@@ -250,12 +250,12 @@ jobs:
             exit 1
           fi
           
-          # 重命名为带架构名的简洁格式
-          # 例如: ipthrottle-x86_64-23.05.0.ipk
+          # 重命名为简洁格式（PKGARCH=all 架构无关，去掉架构名）
+          # 例如: ipthrottle-23.05.0.ipk
           if [ "$PKG_FORMAT" = "ipk" ]; then
-            TARGET_NAME="ipthrottle-${ARCH}-${VERSION}.ipk"
+            TARGET_NAME="ipthrottle-${VERSION}.ipk"
           else
-            TARGET_NAME="ipthrottle-${ARCH}-${VERSION}.apk"
+            TARGET_NAME="ipthrottle-${VERSION}.apk"
           fi
           
           cp "$PKG_FILE" "$TARGET_NAME"
@@ -283,11 +283,9 @@ jobs:
       - name: Upload Package
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.TARGET_NAME }}
-          path: ${{ env.TARGET_NAME }}
+          name: ipthrottle-${{ matrix.openwrt_version }}.${{ matrix.pkg_format }}
+          path: ipthrottle-${{ matrix.openwrt_version }}.${{ matrix.pkg_format }}
           retention-days: 30
-        env:
-          TARGET_NAME: ipthrottle-${{ matrix.arch }}-${{ matrix.openwrt_version }}.${{ matrix.pkg_format }}
 
   release:
     name: Create Release

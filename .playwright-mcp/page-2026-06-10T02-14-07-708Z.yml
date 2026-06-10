@@ -1,0 +1,58 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - link "ImmortalWrt" [ref=e5]:
+        - /url: "#"
+      - list [ref=e6]:
+        - listitem [ref=e7] [cursor=pointer]:
+          - link " 状态 " [ref=e8]:
+            - /url: /cgi-bin/luci/admin/status
+        - listitem [ref=e9] [cursor=pointer]:
+          - link " 系统 " [ref=e10]:
+            - /url: /cgi-bin/luci/admin/system
+        - listitem [ref=e11] [cursor=pointer]:
+          - link " 服务 " [ref=e12]:
+            - /url: /cgi-bin/luci/admin/services
+        - listitem [ref=e13] [cursor=pointer]:
+          - link " 网络 " [ref=e14]:
+            - /url: /cgi-bin/luci/admin/network
+          - list [ref=e15]:
+            - listitem [ref=e16]:
+              - link "接口" [ref=e17]:
+                - /url: /cgi-bin/luci/admin/network/network
+            - listitem [ref=e18]:
+              - link "路由" [ref=e19]:
+                - /url: /cgi-bin/luci/admin/network/routes
+            - listitem [ref=e20]:
+              - link "DHCP" [ref=e21]:
+                - /url: /cgi-bin/luci/admin/network/dhcp
+            - listitem [ref=e22]:
+              - link "DNS" [ref=e23]:
+                - /url: /cgi-bin/luci/admin/network/dns
+            - listitem [ref=e24]:
+              - link "网络诊断" [ref=e25]:
+                - /url: /cgi-bin/luci/admin/network/diagnostics
+            - listitem [ref=e26]:
+              - link "IPThrottle" [ref=e27]:
+                - /url: /cgi-bin/luci/admin/network/ipthrottle
+            - listitem [ref=e28]:
+              - link "防火墙" [ref=e29]:
+                - /url: /cgi-bin/luci/admin/network/firewall
+        - listitem [ref=e30] [cursor=pointer]:
+          - link " 退出" [ref=e31]:
+            - /url: /cgi-bin/luci/admin/logout
+    - generic [ref=e32]:
+      - banner [ref=e33]
+      - generic [ref=e36]:
+        - generic [ref=e38]: 正在载入视图…
+        - contentinfo [ref=e39]:
+          - generic [ref=e40]:
+            - link "Powered by LuCI (HEAD detached at a701807e) branch (26.145.09311~a701807)" [ref=e41] [cursor=pointer]:
+              - /url: https://github.com/openwrt/luci
+            - generic [ref=e42]: "|"
+            - link "ArgonTheme v2.4.3" [ref=e43] [cursor=pointer]:
+              - /url: https://github.com/jerrykuku/luci-theme-argon
+            - generic [ref=e44]: "|"
+            - link "ImmortalWrt 25.12.0-r37854-4b24da3b4c5c" [ref=e45] [cursor=pointer]:
+              - /url: https://immortalwrt.org/
+  - dialog [ref=e47]

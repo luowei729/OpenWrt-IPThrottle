@@ -2,9 +2,6 @@
 .github/signing/key-build
 .github/rsa-keys/private-key.pem
 
-
-.playwright-mcp/*.log
-.playwright-mcp/*.yml
 # 构建产物
 *.ipk
 *.apk
