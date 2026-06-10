@@ -52,11 +52,20 @@ while true; do
     # 2. 检测 nftables 表是否丢失
     # 实现原因: passwall 或其他防火墙操作可能清除 nftables 表
     # 当连续多次检测失败时，自动重新创建规则
+    # 注意: 只有在有启用规则时才检测，避免无规则时死循环
     if ! nft list table ip ipthrottle >/dev/null 2>&1; then
-        NFT_CHECK_FAIL_COUNT=$((NFT_CHECK_FAIL_COUNT + 1))
-        if [ $NFT_CHECK_FAIL_COUNT -ge $NFT_CHECK_THRESHOLD ]; then
-            log_msg "nftables table lost, recreating rules..."
-            /usr/sbin/ipthrottle start 2>&1 | logger -t "ipthrottle-daemon"
+        # 检查是否有启用的规则
+        # 实现原因: 没有启用规则时 nftables 表不会创建，不应尝试重建
+        HAS_ENABLED_RULES=$(uci show ipthrottle 2>/dev/null | grep -c "\.enabled='1'")
+        if [ "$HAS_ENABLED_RULES" -gt 0 ]; then
+            NFT_CHECK_FAIL_COUNT=$((NFT_CHECK_FAIL_COUNT + 1))
+            if [ $NFT_CHECK_FAIL_COUNT -ge $NFT_CHECK_THRESHOLD ]; then
+                log_msg "nftables table lost, recreating rules..."
+                /usr/sbin/ipthrottle start 2>&1 | logger -t "ipthrottle-daemon"
+                NFT_CHECK_FAIL_COUNT=0
+            fi
+        else
+            # 没有启用规则，重置计数器
             NFT_CHECK_FAIL_COUNT=0
         fi
     else
