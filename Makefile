@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ipthrottle
-PKG_VERSION:=1.0.5
+PKG_VERSION:=1.0.6
 PKG_RELEASE:=1
 PKG_MAINTAINER:=OpenWrt IPThrottle Development Team
 PKG_LICENSE:=MIT
@@ -16,10 +16,9 @@ define Package/ipthrottle
   # 依赖说明：
   # - nftables: 用户空间工具（硬性依赖）
   # - luci-base: LuCI 界面框架（硬性依赖）
-  # - tc: 流量控制工具（硬性依赖，opkg/apk 自动选择 tc 或 tc-tiny）
-  # 注意：内核模块(kmod-*)为架构相关包，不在 SDK 中，
-  # 运行时由 init.d 后台自动检测并安装（避免 opkg 锁冲突）
-  DEPENDS:=+nftables +luci-base +tc
+  # 注意：tc 和内核模块(kmod-*)包名在不同版本/架构不同，
+  # 运行时由 init.d 检测并安装（避免包管理器锁冲突）
+  DEPENDS:=+nftables +luci-base
   PKGARCH:=all
 endef
 

@@ -6,17 +6,101 @@ STOP=01
 
 USE_PROCD=1
 
-# 加载依赖检测脚本（只检测，不安装）
+# 加载依赖检测脚本
 . /usr/lib/ipthrottle/deps.sh
 
-start_service() {
-    # 检测依赖是否就绪（只检查+警告，不安装）
-    # 依赖安装由 postinstall.sh 在安装时完成（等待包管理器锁释放后同步安装）
-    # 若安装时锁超时导致部分 kmod 缺失，用户手动 restart 前执行：
-    #   opkg install kmod-ifb kmod-sched-htb   或
-    #   apk add kmod-ifb kmod-sched-htb
-    check_all_deps
+# 等待包管理器锁释放
+# 实现原因: 服务可能在 opkg/apk 安装期间被 procd 自动启动，
+# 此时包管理器锁被占。需等待锁释放后才能安装依赖。
+wait_pkg_lock() {
+    local lock_file=""
+    local max_wait=120
+    local waited=0
     
+    if command -v apk >/dev/null 2>&1; then
+        lock_file="/lib/apk/db/lock"
+    elif command -v opkg >/dev/null 2>&1; then
+        lock_file="/var/lock/opkg.lock"
+    else
+        return 0
+    fi
+    
+    [ ! -f "$lock_file" ] && return 0
+    
+    logger -t ipthrottle "Waiting for package manager lock..."
+    while [ -f "$lock_file" ] && [ $waited -lt $max_wait ]; do
+        sleep 2
+        waited=$((waited + 2))
+    done
+    
+    if [ $waited -ge $max_wait ]; then
+        logger -t ipthrottle "WARNING: Lock wait timeout (${max_wait}s)"
+        return 1
+    fi
+    
+    logger -t ipthrottle "Lock released after ${waited}s"
+    return 0
+}
+
+# 安装依赖包
+install_deps() {
+    local pkg_mgr=""
+    
+    if command -v apk >/dev/null 2>&1; then
+        pkg_mgr="apk"
+    elif command -v opkg >/dev/null 2>&1; then
+        pkg_mgr="opkg"
+    fi
+    
+    [ -z "$pkg_mgr" ] && return 0
+    
+    logger -t ipthrottle "Installing dependencies..."
+    
+    # 安装 tc (包名因版本而异)
+    if ! command -v tc >/dev/null 2>&1; then
+        case "$pkg_mgr" in
+            apk)
+                apk add tc-tiny 2>&1 | logger -t ipthrottle
+                ;;
+            opkg)
+                opkg install tc 2>&1 | logger -t ipthrottle || \
+                opkg install tc-tiny 2>&1 | logger -t ipthrottle || \
+                opkg install iproute2-tc 2>&1 | logger -t ipthrottle
+                ;;
+        esac
+    fi
+    
+    # 安装内核模块
+    for kmod in kmod-ifb kmod-sched-htb; do
+        case "$pkg_mgr" in
+            apk)  apk add "$kmod" 2>&1 | logger -t ipthrottle ;;
+            opkg) opkg install "$kmod" 2>&1 | logger -t ipthrottle ;;
+        esac
+    done
+    
+    # 加载模块
+    for mod in ifb sch_htb sch_ingress act_mirred act_skbedit; do
+        modprobe "$mod" 2>/dev/null
+    done
+    
+    logger -t ipthrottle "Dependencies installed"
+}
+
+start_service() {
+    # 1. 等待包管理器锁释放（如果在安装期间被自动启动）
+    wait_pkg_lock
+    
+    # 2. 检测并安装缺失依赖
+    if ! check_all_deps >/dev/null 2>&1; then
+        install_deps
+    fi
+    
+    # 3. 再次检测（确认依赖已就绪）
+    if ! check_all_deps; then
+        logger -t ipthrottle "ERROR: Dependencies still missing, service may not work"
+    fi
+    
+    # 4. 启动服务
     procd_open_instance
     procd_set_param command /usr/lib/ipthrottle/ipthrottle-daemon
     procd_set_param stdout 1
