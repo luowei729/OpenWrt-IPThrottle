@@ -25,21 +25,28 @@ wait_pkg_lock() {
         return 0
     fi
     
+    # 锁文件不存在 → 未锁定
     [ ! -f "$lock_file" ] && return 0
     
-    logger -t ipthrottle "Waiting for package manager lock..."
-    while [ -f "$lock_file" ] && [ $waited -lt $max_wait ]; do
-        sleep 2
-        waited=$((waited + 2))
-    done
-    
-    if [ $waited -ge $max_wait ]; then
-        logger -t ipthrottle "WARNING: Lock wait timeout (${max_wait}s)"
-        return 1
+    # 用 flock 测试锁是否被占用（非阻塞）
+    # flock -n: 成功=锁可用，失败=被占
+    if ( flock -n 9 ) 9>"$lock_file" 2>/dev/null; then
+        return 0  # 锁可用
     fi
     
-    logger -t ipthrottle "Lock released after ${waited}s"
-    return 0
+    logger -t ipthrottle "Waiting for package manager lock..."
+    while [ $waited -lt $max_wait ]; do
+        sleep 2
+        waited=$((waited + 2))
+        # 再次测试锁
+        if ( flock -n 9 ) 9>"$lock_file" 2>/dev/null; then
+            logger -t ipthrottle "Lock released after ${waited}s"
+            return 0
+        fi
+    done
+    
+    logger -t ipthrottle "WARNING: Lock wait timeout (${max_wait}s)"
+    return 1
 }
 
 # 安装依赖包
