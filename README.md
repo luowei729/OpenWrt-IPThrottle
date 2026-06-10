@@ -283,6 +283,18 @@ logread | grep IPThrottle
 - **时间计划精度**：1分钟
 - **实际应用延迟**： 100ms
 
+## ☕ 支持开发者
+
+如果这个项目对你有帮助，欢迎请作者喝杯咖啡 ☕
+
+你的支持是我持续维护和改进的动力！
+
+| 支付宝 | 微信支付 |
+|:---:|:---:|
+| <img src="https://raw.githubusercontent.com/luowei729/OpenWrt-IPThrottle/main/Alipay.png" width="200" alt="支付宝打赏"> | <img src="https://raw.githubusercontent.com/luowei729/OpenWrt-IPThrottle/main/WeChatPay.png" width="200" alt="微信打赏"> |
+
+> 感谢每一位支持者的慷慨鼓励 🙏
+
 ## 许可证
 
 本项目采用 MIT 许可证
