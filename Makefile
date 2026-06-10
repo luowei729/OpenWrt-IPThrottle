@@ -18,9 +18,9 @@ define Package/ipthrottle
   # - luci-base: LuCI 界面框架
   # - tc-tiny: 流量控制工具（所有版本统一包名，无 tc 包）
   # - kmod-ifb: IFB 虚拟网卡（入站限速必需）
-  # - kmod-sched: 流量调度模块（含 htb/ingress/mirred 等）
+  # 注意: kmod-sched-core 由 tc-tiny 自动依赖
   # 包名参考: docs/package-names.md
-  DEPENDS:=+nftables +luci-base +tc-tiny +kmod-ifb +kmod-sched
+  DEPENDS:=+nftables +luci-base +tc-tiny +kmod-ifb
   PKGARCH:=all
 endef
 
