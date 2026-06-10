@@ -87,6 +87,91 @@ check_kmod_only() {
     return 0
 }
 
+# ============ 检测包管理器锁 ============
+
+# 检测包管理器是否正在运行（被锁定）
+# 实现原因: opkg/apk 安装期间持有锁文件，此时不能调用它们安装依赖
+# 返回值: 0=锁可用(可以安装依赖) 1=锁被占(包管理器正在运行)
+is_pkg_locked() {
+    local lock_file=""
+    
+    if command -v apk >/dev/null 2>&1; then
+        lock_file="/lib/apk/db/lock"
+    elif command -v opkg >/dev/null 2>&1; then
+        lock_file="/var/lock/opkg.lock"
+    else
+        return 0
+    fi
+    
+    # 锁文件不存在 → 未锁定
+    [ ! -f "$lock_file" ] && return 0
+    
+    # 用 flock 测试锁是否被占用
+    # flock -n: 非阻塞尝试，成功=锁可用，失败=被占
+    ( flock -n 9 2>/dev/null || return 1 ) 9>"$lock_file"
+}
+
+# ============ 安装依赖（仅在包管理器可用时） ============
+
+# 安装单个包
+install_pkg() {
+    local pkg="$1"
+    
+    if command -v apk >/dev/null 2>&1; then
+        apk add "$pkg" 2>/dev/null
+    elif command -v opkg >/dev/null 2>&1; then
+        opkg install "$pkg" 2>/dev/null
+    fi
+}
+
+# 尝试后台延时安装缺失的依赖
+# 实现原因: 服务可能在 opkg/apk 安装期间被 procd 启动，此时包管理器锁被占。
+# 后台 sleep 5s 等待锁释放，然后安装缺失的内核模块。
+# 用户空间包(nftables/tc/luci-base)已由 Makefile DEPENDS 在安装时原子安装。
+deferred_install_deps() {
+    # 检查包管理器是否被锁
+    if is_pkg_locked; then
+        deps_log "Package manager locked, starting background deferred install (5s delay)..."
+        (
+            sleep 5
+            # 等待锁释放（最长等 60s）
+            local waited=0
+            while is_pkg_locked && [ $waited -lt 60 ]; do
+                sleep 2
+                waited=$((waited + 2))
+            done
+            
+            if is_pkg_locked; then
+                logger -t ipthrottle "ERROR: pkg manager still locked after 60s, deps not installed"
+                return 1
+            fi
+            
+            # 尝试安装缺失的内核模块
+            for kmod in kmod-ifb kmod-sched-htb; do
+                install_pkg "$kmod" 2>/dev/null
+            done
+            
+            # 加载模块
+            for mod in ifb sch_htb; do
+                modprobe "$mod" 2>/dev/null
+            done
+            
+            logger -t ipthrottle "Deferred deps installation completed"
+        ) &
+        return 0
+    fi
+    
+    # 包管理器可用，直接同步安装
+    for kmod in kmod-ifb kmod-sched-htb; do
+        install_pkg "$kmod" 2>/dev/null
+    done
+    for mod in ifb sch_htb; do
+        modprobe "$mod" 2>/dev/null
+    done
+    
+    return 0
+}
+
 # ============ 主函数 ============
 
 check_all_deps() {

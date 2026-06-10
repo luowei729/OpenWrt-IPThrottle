@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ipthrottle
-PKG_VERSION:=1.0.4
+PKG_VERSION:=1.0.5
 PKG_RELEASE:=1
 PKG_MAINTAINER:=OpenWrt IPThrottle Development Team
 PKG_LICENSE:=MIT
@@ -14,15 +14,12 @@ define Package/ipthrottle
   TITLE:=IP throttling control for OpenWrt
   
   # 依赖说明：
-  # 标准做法：所有依赖在 Makefile 声明，包管理器原子安装，不死锁。
   # - nftables: 用户空间工具（硬性依赖）
   # - luci-base: LuCI 界面框架（硬性依赖）
-  # - tc||tc-tiny: tc 工具，opkg 叫 tc，apk 叫 tc-tiny（二者选一即可）
-  # - kmod-ifb: IFB 虚拟网卡（内核模块）
-  # - kmod-sched-core: 调度核心模块（含 htb 基础）
-  # - kmod-sched-htb: HTB 队列（若固件已内置则跳过）
-  # 使用 || 语法：包名在各版本可能不同，fallback 让 opkg/apk 智能选择
-  DEPENDS:=+nftables +luci-base +tc||+tc-tiny +kmod-ifb +kmod-sched-core +kmod-sched-htb
+  # - tc: 流量控制工具（硬性依赖，opkg/apk 自动选择 tc 或 tc-tiny）
+  # 注意：内核模块(kmod-*)为架构相关包，不在 SDK 中，
+  # 运行时由 init.d 后台自动检测并安装（避免 opkg 锁冲突）
+  DEPENDS:=+nftables +luci-base +tc
   PKGARCH:=all
 endef
 

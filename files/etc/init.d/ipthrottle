@@ -10,19 +10,19 @@ USE_PROCD=1
 . /usr/lib/ipthrottle/deps.sh
 
 start_service() {
-    # 检测依赖（只检查+警告，不调用 opkg/apk）
-    # 设计原因: 依赖安装由包管理器在 opkg/apk install 时原子完成，
-    # 此处只做运行时检测，避免死锁
-    if ! check_all_deps; then
-        logger -t ipthrottle "WARNING: Some deps missing, service may not work. Install manually then restart."
-        # 仍然启动 daemon，让用户看到界面并能手动安装依赖后重启生效
-    fi
+    # 设计原因: 包安装期间 procd 会触发服务启动，此时 opkg/apk 锁被占。
+    # 方案: 先启动服务骨架，后台延时安装缺失依赖（避免死锁）。
+    # 用户手动重启 (/etc/init.d/ipthrottle restart) 时，锁已释放，正常安装。
     
+    # 1. 启动服务（即使缺少部分依赖，daemon 会记日志提示）
     procd_open_instance
     procd_set_param command /usr/lib/ipthrottle/ipthrottle-daemon
     procd_set_param stdout 1
     procd_set_param stderr 1
     procd_close_instance
+    
+    # 2. 后台延时安装缺失的依赖（不阻塞启动）
+    deferred_install_deps
 }
 
 service_triggers() {
