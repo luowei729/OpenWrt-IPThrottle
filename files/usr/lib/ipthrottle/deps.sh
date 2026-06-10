@@ -37,12 +37,41 @@ check_kmod() {
 install_package() {
     local pkg="$1"
     local pkg_mgr="$2"
+    local max_retries=10
+    local retry_delay=3
     
     deps_log "Installing package: $pkg"
     
     case "$pkg_mgr" in
         apk)
-            apk add "$pkg" 2>&1
+            # OpenWrt 25+ 使用 apk，需要处理数据库锁冲突
+            # 实现原因: 包安装后 procd 自动启动服务，此时 apk 数据库可能仍被锁
+            local attempt=0
+            local output
+            local rc
+            while [ $attempt -lt $max_retries ]; do
+                output=$(apk add "$pkg" 2>&1)
+                rc=$?
+                
+                # 安装成功
+                if [ $rc -eq 0 ]; then
+                    echo "$output"
+                    return 0
+                fi
+                
+                # 检查是否是锁冲突错误（"Unable to lock database" 或 "Resource temporarily unavailable"）
+                if echo "$output" | grep -qE "Unable to lock database|Resource temporarily unavailable"; then
+                    attempt=$((attempt + 1))
+                    deps_log "apk database locked, retrying in ${retry_delay}s ($attempt/$max_retries)..."
+                    sleep $retry_delay
+                else
+                    # 其他错误，不重试
+                    echo "$output"
+                    return 1
+                fi
+            done
+            deps_log "ERROR: Failed to install $pkg after $max_retries retries (apk lock timeout)"
+            return 1
             ;;
         opkg)
             opkg update >/dev/null 2>&1

@@ -9,7 +9,32 @@ USE_PROCD=1
 # 加载依赖检测脚本
 . /usr/lib/ipthrottle/deps.sh
 
+# 等待包管理器锁释放
+# 实现原因: OpenWrt 25 使用 apk，包安装后 procd 自动启动服务，
+# 此时 apk 可能仍在运行（数据库被锁），需要等待锁释放后再检查依赖
+wait_pkg_lock() {
+    local max_wait=60
+    local waited=0
+    
+    # 检测包管理器类型
+    if command -v apk >/dev/null 2>&1; then
+        # apk 锁文件路径
+        local lock_file="/lib/apk/db/lock"
+        while [ -f "$lock_file" ] && [ $waited -lt $max_wait ]; do
+            logger -t ipthrottle "Waiting for apk lock to release (${waited}s/${max_wait}s)..."
+            sleep 2
+            waited=$((waited + 2))
+        done
+        if [ $waited -ge $max_wait ]; then
+            logger -t ipthrottle "WARNING: apk lock wait timeout, proceeding anyway"
+        fi
+    fi
+}
+
 start_service() {
+    # 等待包管理器锁释放（避免 apk add 锁冲突）
+    wait_pkg_lock
+    
     # 启动前检查依赖
     if ! check_all_deps; then
         logger -t ipthrottle "ERROR: Dependencies check failed, service not started"

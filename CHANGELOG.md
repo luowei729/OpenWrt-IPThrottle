@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-10
+
+### Fixed
+- 北京时间 2026-06-10 14:15 - 修复 OpenWrt 25 全新安装报错
+  - **问题1: RPC权限错误** `ubus code 6: 没有权限`
+    - 原因: ACL JSON 缺少 ubus 和 file 权限声明
+    - 修复: 在 `luci-app-ipthrottle.json` 中添加 ubus(uci/file) 和 file 读写权限
+  - **问题2: apk数据库锁冲突** `Unable to lock database: Resource temporarily unavailable`
+    - 原因: 包安装后 procd 自动启动服务，此时 apk 数据库仍被锁
+    - 修复1: `init.d/ipthrottle` 添加 `wait_pkg_lock()` 函数，启动前等待锁释放（最长60秒）
+    - 修复2: `deps.sh` 的 `install_package()` 添加重试机制，检测到锁冲突时自动重试（最多10次，间隔3秒）
+
 ## [1.0.1] - 2026-06-10
 
 ### Added

@@ -2,10 +2,26 @@
 	"luci-app-ipthrottle": {
 		"description": "Grant access to IPThrottle configuration",
 		"read": {
-			"uci": [ "ipthrottle" ]
+			"uci": [ "ipthrottle" ],
+			"ubus": {
+				"uci": [ "get" ],
+				"file": [ "read", "list" ]
+			},
+			"file": {
+				"/etc/ipthrottle/*": [ "read" ],
+				"/usr/lib/ipthrottle/*": [ "read", "exec" ],
+				"/www/luci-static/resources/view/ipthrottle*": [ "read" ]
+			}
 		},
 		"write": {
-			"uci": [ "ipthrottle" ]
+			"uci": [ "ipthrottle" ],
+			"ubus": {
+				"uci": [ "add", "set", "delete", "commit", "apply" ],
+				"file": [ "write", "remove" ]
+			},
+			"file": {
+				"/etc/ipthrottle/*": [ "write" ]
+			}
 		}
 	}
 }
