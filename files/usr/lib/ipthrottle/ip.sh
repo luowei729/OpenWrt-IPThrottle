@@ -64,6 +64,10 @@ ip_validate() {
 # 参数: $1=条目 (单IP或 start-end 格式)
 # 返回: 0=合法, 1=非法
 # 实现原因: UCI 的 list ip_entry 可能存储单 IP 或 IP 段，需统一验证
+# 支持格式:
+#   - 单 IP: 192.168.1.100
+#   - IP 段完整格式: 192.168.1.10-192.168.1.20
+#   - IP 段短格式: 192.168.1.10-20 (自动补全为 192.168.1.20)
 ip_entry_validate() {
     local entry="$1"
     # 检查是否是 IP 段 (含 - 分隔符)
@@ -71,8 +75,26 @@ ip_entry_validate() {
         *-*)
             # IP 段格式: start-end
             local start="${entry%-*}"
-            local end="${entry#*-}"
-            ip_validate "$start" && ip_validate "$end"
+            local end_part="${entry#*-}"
+            
+            # 验证起始 IP
+            ip_validate "$start" || return 1
+            
+            # 处理短格式：如果 end 不含 .，则从 start 提取前缀拼接
+            local end_ip="$end_part"
+            case "$end_part" in
+                *.*.*.*)
+                    # 完整 IP 格式
+                    ;;
+                *)
+                    # 短格式：拼接前缀
+                    local prefix="${start%.*}"
+                    end_ip="${prefix}.${end_part}"
+                    ;;
+            esac
+            
+            # 验证结束 IP
+            ip_validate "$end_ip"
             ;;
         *)
             # 单 IP 格式
@@ -82,7 +104,9 @@ ip_entry_validate() {
 }
 
 # 展开 IP 段为单个 IP 列表
-# 参数: $1=IP 段 (start-end 格式，如 192.168.1.10-192.168.1.20)
+# 参数: $1=IP 段 (start-end 格式)
+#       支持完整格式: 192.168.1.10-192.168.1.20
+#       支持短格式: 192.168.1.10-20 (自动补全为 192.168.1.20)
 # 输出: 每行一个 IP 地址 (通过 echo)
 # 返回: 0=成功, 1=非法输入
 # 实现原因: nftables 不支持直接匹配 IP 范围，需要展开为独立 IP 或转换为 CIDR
@@ -90,11 +114,32 @@ ip_entry_validate() {
 ip_range_expand() {
     local range="$1"
     local start_ip="${range%-*}"
-    local end_ip="${range#*-}"
+    local end_part="${range#*-}"
     
-    # 验证起止 IP 合法性
-    if ! ip_validate "$start_ip" || ! ip_validate "$end_ip"; then
-        ipt_log_msg "ERROR" "Invalid IP in range: $range"
+    # 验证起始 IP 合法性
+    if ! ip_validate "$start_ip"; then
+        ipt_log_msg "ERROR" "Invalid start IP in range: $range"
+        return 1
+    fi
+    
+    # 处理短格式 IP 段（如 192.168.1.10-20）
+    # 如果 end 部分不是完整 IP（不含 .），则从 start IP 提取前缀拼接
+    local end_ip="$end_part"
+    case "$end_part" in
+        *.*.*.*)
+            # 完整 IP 格式，直接使用
+            ;;
+        *)
+            # 短格式：从 start IP 提取前三段，拼接 end 部分
+            # 例如: start=192.168.1.10, end_part=20 → end_ip=192.168.1.20
+            local prefix="${start_ip%.*}"
+            end_ip="${prefix}.${end_part}"
+            ;;
+    esac
+    
+    # 验证结束 IP 合法性
+    if ! ip_validate "$end_ip"; then
+        ipt_log_msg "ERROR" "Invalid end IP in range: $range (resolved to: $end_ip)"
         return 1
     fi
     

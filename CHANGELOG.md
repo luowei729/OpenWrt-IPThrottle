@@ -7,6 +7,106 @@
 
 ## [Unreleased]
 
+### Added
+- 北京时间 2026-06-10 12:28 - passwall 代理上传限速支持
+  - **问题根因**: passwall TCP 使用 REDIRECT 将上传流量重定向到本地代理进程(sing-box)，
+    代理进程发送到 WAN 的包 saddr=路由器IP，客户端IP丢失 → tc fw filter mark=0 → 不限速
+  - **解决方案**: 新增 prerouting chain (hook prerouting priority mangle)
+    - 在 nat REDIRECT 之前用 nftables `limit rate over` 硬限制每个客户端的外网上传速率
+    - 排除 LAN 目标流量 (`ip daddr != { RFC1918 }`)，避免影响内网传输
+    - 同一 IP 出现在多条规则时，取最小 upload_kbps（最严格限制）
+    - 速率转换: kbps → kbytes/second (nftables limit 只支持字节单位)
+  - **关键 bug 修复**: nftables limit 语法
+    - `limit rate X drop` = 速率低于X时drop（错误！会阻断所有流量）
+    - `limit rate over X drop` = 速率超过X时drop（正确）
+  - **测试结果** (passwall sing-box hysteria 代理):
+    - 修复前: 71.8 Mbps（不限速）
+    - 修复后: 6.15 Mbps（限制 5 Mbps），约 20% overshoot
+    - overshoot 原因: nftables limit 是硬限制(drop)，TCP 拥塞控制导致波动
+    - 直连上传不受影响: 5.02 Mbps（tc htb 平滑整形，精度 ±1%）
+  - **架构说明**: 四个 chain 协作覆盖所有流量路径
+    - prerouting: passwall 代理上传限速 (nftables limit drop)
+    - forward: 直连流量上传+下载标记 (tc mark)
+    - output: passwall 代理下载标记 (tc mark)
+  - **已知限制**: passwall 上传限速精度 ±20%（nftables limit 特性），
+    直连上传精度 ±1%（tc htb + fq_codel）
+  - 修改文件: files/usr/lib/ipthrottle/core.sh (generate_nftables_config)
+
+- 北京时间 2026-06-10 12:12 - passwall 代理流量下载限速支持
+  - **问题根因**: passwall TCP 使用 REDIRECT (prerouting nat priority -101) 将流量重定向到本地 sing-box 进程，
+    代理流量路径: client→prerouting→REDIRECT→sing-box→output→br-lan→client
+    不经过 forward chain → ipthrottle mark 未设置 → tc default class 不限速
+  - **解决方案**: 新增 output chain (type route hook output priority -1)
+    - 在 output hook 标记 daddr=客户端IP 的包（passwall 发送数据到客户端时经过此 hook）
+    - 保留 forward chain 处理直连流量（不经过代理的流量）
+    - 两个 chain 协作覆盖所有流量路径
+  - **测试结果** (passwall sing-box hysteria 代理):
+    - curl google.com 通过 passwall: 257 KB/s ≈ 2 Mbps (限制 5 Mbps) ✅
+    - tc class 1:3033 overlimits: 0 → 10（限速生效）
+    - 之前无 output chain: 94.7 Mbps（不限速）→ 现在: 限速生效
+  - 修改文件: files/usr/lib/ipthrottle/core.sh (generate_nftables_config)
+
+- 北京时间 2026-06-10 11:45 - LuCI 首页规则列表增加"优先级"列
+  - 将 priority 字段从仅弹窗显示(modalonly)改为列表+弹窗均显示
+  - 列顺序: 启用 → 优先级 → 规则名称 → 内网IP → 上传 → 下载 → 生效时间
+  - 用户可在首页直观看到每条规则的优先级，方便调整规则执行顺序
+  - 修改文件: root/www/luci-static/resources/view/ipthrottle.js
+
+### Changed
+- 北京时间 2026-06-10 12:12 - 移除首页优先级列的 description 提示文字
+  - 首页不再显示"数字越小优先级越高 (1-99)"提示，界面更简洁
+  - 修改文件: root/www/luci-static/resources/view/ipthrottle.js
+
+### Fixed
+- 北京时间 2026-06-10 11:45 - 修复上传限速不准确问题（设置5M实际跑到10+M）
+  - **根因分析**:
+    1. HTB 仅对流量分类，class 内部默认 FIFO 队列不控制突发，TCP 流量产生严重 burst
+    2. 默认 r2q=10 导致低速率 class 的 quantum 过大（5mbit → 62500字节），调度粒度粗糙
+    3. 未显式设置 burst 参数，令牌桶大小由 tc 自动计算，对低速率不够精确
+  - **修复方案**:
+    1. **添加 fq_codel 叶子队列调度器** (core.sh apply_tc_to_device)
+       - 每个 IP class（叶子节点）添加 fq_codel qdisc
+       - fq: 按流公平排队，防止单个 TCP 连接占满带宽
+       - codel: 主动管理队列长度，控制排队延迟，防止 bufferbloat
+       - 参数: limit 1024 interval 100ms target 5ms
+       - 如果内核不支持 fq_codel 则静默跳过（不影响基本限速功能）
+    2. **根 htb qdisc 添加 r2q 100 参数** (core.sh create_root_htb)
+       - quantum = rate / r2q，r2q=100 时 5mbit 的 quantum = 6250 字节（约4个MTU）
+       - 消除 "quantum of class XXXX is big" 警告，提高调度精度
+    3. **为限速 class 添加显式 burst/cburst 参数** (core.sh apply_tc_to_device)
+       - 公式: burst = rate_kbps * 1000 / 800 (约10ms流量)，最小4K最大60K
+       - 独立模式: IP class 添加 burst（实际限速点）
+       - 共享模式: rule class 添加 burst（实际限速点）
+  - **预期效果**: 上传限速精度从 ±50-100% 提升到 ±10%
+  - 修改文件: files/usr/lib/ipthrottle/core.sh (create_root_htb, apply_tc_to_device)
+  - **iperf3 测试验证** (2026-06-10 11:50 北京时间):
+    - 环境: 路由器 10.0.0.202, 客户端 10.0.0.210, 服务器 47.102.196.219
+    - 配置: 10.0.0.210 上传/下载限速 5120 kbps = 5 Mbps
+    - 单流上传: **5.01 Mbps** (sender) / **4.78 Mbps** (receiver) ✅ 精度 ±1%
+    - 4流上传: **5.28 Mbps** (sender) / **4.77 Mbps** (receiver) ✅ 
+    - 单流下载: **5.20 Mbps** (sender) / **4.93 Mbps** (receiver) ✅
+    - tc 统计: eth1 class 1:2033 overlimits 22330（限速生效）
+    - fq_codel 已生效: 22 个叶子队列已挂载，quantum 1514，target 5ms
+    - r2q 100 已生效: 消除 "quantum is big" 警告
+    - burst 6400b 已生效: 令牌桶大小正确
+
+- 北京时间 2026-06-10 11:30 - 修复 IP 段独立限速和短格式 IP 段解析问题
+  - **问题1: IP 段独立限速失效**
+    - 根因: 独立限速模式下，所有 IP 共享同一个 mark，tc filter 无法区分不同 IP 的流量
+    - 现象: IP 段内只有第一个 IP 被限速，其他 IP 不限速
+    - 修复: 为每个 IP 分配不同的 mark（从 10000 开始递增），tc filter 根据 IP 级别的 mark 匹配
+    - 修改文件: core.sh (generate_nftables_config, apply_tc_to_device, start_service)
+  - **问题2: 短格式 IP 段解析失败**
+    - 根因: ip_range_expand 只支持完整格式 `192.168.1.10-192.168.1.20`，不支持短格式 `192.168.1.10-20`
+    - 现象: 用户在 LuCI 输入短格式 IP 段，规则不生效
+    - 修复: ip_range_expand 和 ip_entry_validate 支持短格式，自动从起始 IP 提取前缀拼接
+    - 修改文件: ip.sh (ip_range_expand, ip_entry_validate)
+  - **问题3: flow offloading 导致限速失效**
+    - 根因: fw4 flowtable 让已建立连接走 fast path，绕过 nftables forward chain
+    - 现象: nftables 计数器为 0，mark 规则无法匹配包
+    - 修复: start_service 自动检测并禁用 flow offloading，stop_service 恢复原始设置
+    - 修改文件: core.sh (disable_flow_offloading, restore_flow_offloading)
+
 ### Changed
 - 北京时间 2026-06-10 10:15 - 修复 LuCI 界面缓存不刷新问题（方案4：插件自增版本号）
   - **问题根因**: LuCI JS 框架用 `{cache:true}` 加载模块，版本号绑定 `luci.js` 编译时间戳，

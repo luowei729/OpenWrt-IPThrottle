@@ -1,6 +1,19 @@
 # OpenWrt IP限速插件 (IPThrottle)
 
-一个功能强大的OpenWrt IP限速插件，支持精确的带宽控制、多WAN接口、灵活的时间计划。
+**精准控制每一台设备的网络带宽，告别网络拥堵。**
+
+基于 nftables + tc htb 的混合架构，实现按 IP 精确限速，支持独立/共享带宽模式。  
+**兼容 passwall 透明代理**，代理流量与直连流量均可限速，覆盖所有网络场景。  
+支持多 WAN、IP 段、协议过滤、时间计划，满足复杂网络环境需求。
+
+### 核心特性
+
+- 🎯 **精确限速**：上传/下载独立限速，精度 ±1%（直连）/ ±20%（代理）
+- 🌐 **passwall 兼容**：代理流量自动识别，无需额外配置即可限速
+- 📊 **双模式限速**：独立限速（每 IP 独立带宽）/ 共享限速（多 IP 共享带宽池）
+- ⏰ **时间计划**：按星期/时间段自动生效，灵活控制网络使用时段
+- 🚀 **多 WAN 支持**：可为不同 WAN 接口设置独立规则
+- 🔧 **LuCI 界面**：可视化配置，优先级排序，一目了然
 
 ## 核心功能
 
@@ -38,34 +51,45 @@
 
 ## 安装方法
 
-### 方法一：使用opkg安装（推荐）
+### OpenWrt 23.05 / 24.10（opkg + .ipk）
 
+**Web 界面安装**：LuCI → 系统 → 软件 → 上传软件包 → 选择 `.ipk` 文件 → 安装
+
+**SSH 安装**：
 ```bash
-opkg update
-opkg install IPThrottle
+# 下载 .ipk 文件后上传到路由器，或使用 wget 下载
+opkg install ipthrottle-x86_64-24.10.0.ipk
 ```
 
-### 方法二：手动安装
+### OpenWrt 25.12+（apk + .apk）
 
+⚠️ **重要**：OpenWrt 25 使用 apk 包管理器，**不支持 Web 界面上传安装**（会报签名验证错误）。必须通过 SSH 安装。
+
+**SSH 安装**：
 ```bash
-# 下载最新的IPK包
-wget https://github.com/your-repo/IPThrottle/releases/latest/download/ipthrottle_1.0.0_all.ipk
-
-# 安装
-opkg install ipthrottle_1.0.0_all.ipk
+# 1. 下载 .apk 文件后上传到路由器，或使用 wget 下载
+# 2. 使用 --allow-untrusted 参数跳过签名验证
+apk add --allow-untrusted ipthrottle-x86_64-25.12.0.apk
 ```
 
-### 方法三：源码编译
+**参数说明**：
+- `--allow-untrusted`：允许安装未签名或签名不匹配的包（本项目使用自签名密钥）
+
+### 依赖自动安装
+
+插件安装后，服务启动时会自动检测并安装缺失的依赖（tc、nftables、kmod-sched 等），**无需手动安装**。
+
+### 源码编译
 
 ```bash
 # 克隆源码
-git clone https://github.com/your-repo/IPThrottle.git
+git clone https://github.com/luowei729/OpenWrt-IPThrottle.git
 
 # 进入目录
-cd IPThrottle
+cd OpenWrt-IPThrottle
 
-# 编译（需要OpenWrt SDK环境）
-make package/IPThrottle/compile V=s
+# 编译（需要 OpenWrt SDK 环境）
+make package/ipthrottle/compile V=s
 ```
 
 ## 快速开始

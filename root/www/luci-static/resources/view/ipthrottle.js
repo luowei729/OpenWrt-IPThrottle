@@ -55,8 +55,8 @@
 		style.textContent = '::placeholder { color: #999 !important; opacity: 1 !important; }';
 		document.head.appendChild(style);
 
-		m = new form.Map('ipthrottle', _('IP限速设置'),
-			_('配置内网IP的限速规则'));
+		m = new form.Map('ipthrottle', _('IPThrottle - 内网IP限速'),
+			_('按IP限制上传/下载带宽，支持独立/共享限速、IP范围、协议过滤、多WAN和时间计划'));
 
 		// ==========================================
 		// 规则列表（GridSection）- 精简版
@@ -71,6 +71,18 @@
 		o.rmempty = false;
 		o.default = '1';
 
+		// ==========================================
+		// 优先级（列表+弹窗均显示）
+		// 实现原因: 用户在首页规则列表中需要直观看到每条规则的优先级，
+		//          方便调整规则执行顺序（数字越小优先级越高）。
+		// 注意: 移除 modalonly 使其同时在 GridSection 列表和编辑弹窗中显示。
+		// ==========================================
+		o = s.option(form.Value, 'priority', _('优先级'));
+		o.rmempty = false;
+		o.datatype = 'uinteger';
+		o.placeholder = '10';
+		o.default = '10';
+
 		// 规则名称
 		o = s.option(form.Value, 'name', _('规则名称'));
 		o.rmempty = false;
@@ -80,7 +92,6 @@
 		o = s.option(form.DynamicList, 'ip_entry', _('内网IP'));
 		o.rmempty = false;
 		o.placeholder = '192.168.1.100 或 192.168.1.100-200';
-		o.description = _('支持单个IP或IP范围（用-连接），每行一个');
 
 		// 上传限速 - 标题带单位
 		o = s.option(form.Value, 'upload_kbps', _('上传<br/><small style="color:#999">Kbps</small>'));
@@ -135,15 +146,6 @@
 		o.default = 'independent';
 		o.rmempty = false;
 		o.modalonly = true;
-
-		// 优先级
-		o = s.option(form.Value, 'priority', _('优先级'));
-		o.rmempty = false;
-		o.datatype = 'uinteger';
-		o.placeholder = '10';
-		o.default = '10';
-		o.modalonly = true;
-		o.description = _('数字越小优先级越高 (1-99)');
 
 		// ==========================================
 		// 自定义时间设置（modalonly）
