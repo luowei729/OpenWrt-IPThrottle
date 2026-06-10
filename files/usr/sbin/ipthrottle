@@ -38,9 +38,9 @@ case "$1" in
         # 检查 nftables 表是否存在
         if nft list table ip ipthrottle >/dev/null 2>&1; then
             echo "ipthrottle: running"
-            # 显示规则数量
-            RULE_COUNT=$(nft list table ip ipthrottle 2>/dev/null | grep -c "chain rule_")
-            echo "  Active rules: $RULE_COUNT"
+            # 显示 IP 限速规则数量（prerouting chain 中的 limit 规则）
+            RULE_COUNT=$(nft list table ip ipthrottle 2>/dev/null | grep -c "limit rate over")
+            echo "  Active IP throttle rules: $RULE_COUNT"
         else
             echo "ipthrottle: stopped"
         fi
