@@ -16,10 +16,11 @@ define Package/ipthrottle
   # 依赖说明：
   # - nftables: nftables 用户空间工具
   # - luci-base: LuCI 界面框架
-  # - tc: 流量控制工具（opkg: tc 或 tc-tiny, apk: tc-tiny）
+  # - tc-tiny: 流量控制工具（所有版本统一包名，无 tc 包）
   # - kmod-ifb: IFB 虚拟网卡（入站限速必需）
   # - kmod-sched: 流量调度模块（含 htb/ingress/mirred 等）
-  DEPENDS:=+nftables +luci-base +tc +kmod-ifb +kmod-sched
+  # 包名参考: docs/package-names.md
+  DEPENDS:=+nftables +luci-base +tc-tiny +kmod-ifb +kmod-sched
   PKGARCH:=all
 endef
 
